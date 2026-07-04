@@ -255,7 +255,7 @@ class MainWindow(QWidget):
         self.grp_input = QGroupBox()
         il = QVBoxLayout(self.grp_input)
         self.ed_text = QTextEdit()
-        self.ed_text.setMinimumHeight(90)
+        self.ed_text.setMinimumHeight(70)
         il.addWidget(self.ed_text)
         hi = QHBoxLayout()
         self.lbl_text_lang = QLabel()
@@ -481,7 +481,7 @@ class MainWindow(QWidget):
         self.tbl_results.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
         self.tabs.addTab(self.txt_log, "")
         self.tabs.addTab(self.tbl_results, "")
-        self.tabs.setMinimumHeight(160)
+        self.tabs.setMinimumHeight(110)
         bl.addWidget(self.tabs)
 
         hplay = QHBoxLayout()

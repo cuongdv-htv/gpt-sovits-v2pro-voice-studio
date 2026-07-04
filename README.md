@@ -6,6 +6,8 @@
 
 > 📖 **Hướng dẫn sử dụng chi tiết (tiếng Việt):** [docs/HUONG_DAN_SU_DUNG.md](docs/HUONG_DAN_SU_DUNG.md)
 
+![GPT-SoVITS v2Pro Voice Studio](assets/screenshot.png)
+
 ---
 
 ## Kiến trúc / アーキテクチャ

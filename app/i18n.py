@@ -102,6 +102,38 @@ STRINGS = {
     },
     "preview_generating": {"vi": "🎧 Đang tạo bản thử…", "ja": "🎧 試聴を生成中…", "en": "🎧 Generating preview…"},
     "preview_done": {"vi": "🎧 Bản thử sẵn sàng — đang phát.", "ja": "🎧 試聴の準備完了 — 再生中。", "en": "🎧 Preview ready — playing."},
+    # ---- Dialogue (hội thoại đa giọng) ----
+    "btn_dialogue": {"vi": "🎭 Hội thoại đa giọng…", "ja": "🎭 マルチボイス会話…", "en": "🎭 Multi-voice dialogue…"},
+    "dlg_title": {"vi": "Hội thoại đa giọng", "ja": "マルチボイス会話", "en": "Multi-voice dialogue"},
+    "dlg_hint": {
+        "vi": "Mỗi lời thoại một dòng, mở đầu bằng [Vai]. Mỗi vai gán một voice profile. Khoảng lặng giữa các lời thoại = fragment_interval (Nâng cao).",
+        "ja": "各セリフは [役名] で始まる1行。役ごとにボイスプロファイルを割り当て。セリフ間の無音は fragment_interval（詳細設定）。",
+        "en": "One line per utterance, starting with [Role]. Map each role to a voice profile. Silence between lines = fragment_interval (Advanced).",
+    },
+    "dlg_script_placeholder": {
+        "vi": "[A] こんにちは、田中さん。\n[B] ああ、佐藤さん！お久しぶりです。\n[A] 最近どうですか？",
+        "ja": "[A] こんにちは、田中さん。\n[B] ああ、佐藤さん！お久しぶりです。\n[A] 最近どうですか？",
+        "en": "[A] Hello, Mr. Tanaka.\n[B] Oh, Ms. Sato! Long time no see.\n[A] How have you been?",
+    },
+    "dlg_scan": {"vi": "🔍 Quét vai", "ja": "🔍 役をスキャン", "en": "🔍 Scan roles"},
+    "dlg_col_tag": {"vi": "Vai", "ja": "役", "en": "Role"},
+    "dlg_col_profile": {"vi": "Voice profile", "ja": "ボイスプロファイル", "en": "Voice profile"},
+    "dlg_generate": {"vi": "🎭 Tạo hội thoại", "ja": "🎭 会話を生成", "en": "🎭 Generate dialogue"},
+    "dlg_need_profiles": {
+        "vi": "Chưa có voice profile nào. Hãy lưu ít nhất 1 hồ sơ giọng (panel Giọng mẫu) trước.",
+        "ja": "ボイスプロファイルがありません。先に参照音声パネルで1つ以上保存してください。",
+        "en": "No voice profiles yet. Save at least one profile (Reference voice panel) first.",
+    },
+    "dlg_unmapped": {"vi": "Vai chưa được gán giọng hợp lệ:", "ja": "役に有効な声が割り当てられていません:", "en": "Role has no valid voice assigned:"},
+    "dlg_parse_error": {
+        "vi": "Kịch bản có nội dung trước tag [Vai] đầu tiên. Mỗi lời thoại phải bắt đầu bằng [Vai].",
+        "ja": "最初の [役名] タグより前にテキストがあります。各セリフは [役名] で始めてください。",
+        "en": "The script has text before the first [Role] tag. Every utterance must start with [Role].",
+    },
+    "dlg_parse_empty": {"vi": "Kịch bản trống hoặc không có lời thoại hợp lệ.", "ja": "台本が空か、有効なセリフがありません。", "en": "The script is empty or has no valid utterances."},
+    "dlg_running": {"vi": "Đang tạo hội thoại…", "ja": "会話を生成中…", "en": "Generating dialogue…"},
+    "dlg_done": {"vi": "✓ Xong:", "ja": "✓ 完了:", "en": "✓ Done:"},
+
     "grp_queue": {"vi": "Hàng đợi", "ja": "キュー", "en": "Queue"},
     "queue_col_name": {"vi": "Tên", "ja": "名前", "en": "Name"},
     "queue_col_lang": {"vi": "Ngôn ngữ", "ja": "言語", "en": "Language"},

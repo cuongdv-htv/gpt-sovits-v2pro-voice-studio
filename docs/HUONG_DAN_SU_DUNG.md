@@ -21,6 +21,8 @@
 12. [Mẹo nâng cao chất lượng giọng](#12-mẹo-nâng-cao-chất-lượng-giọng)
 13. [Xử lý sự cố](#13-xử-lý-sự-cố)
 14. [Câu hỏi thường gặp (FAQ)](#14-câu-hỏi-thường-gặp-faq)
+15. [Hội thoại đa giọng](#15-hội-thoại-đa-giọng)
+16. [CLI mode (chạy không cần GUI)](#16-cli-mode-chạy-không-cần-gui)
 
 ---
 
@@ -441,3 +443,54 @@ A: Copy thư mục `%APPDATA%\GPT-SoVITS-VoiceStudio\` (chứa `settings.json` +
 ---
 
 *Tài liệu thuộc dự án GPT-SoVITS v2Pro Voice Studio. Engine: [RVC-Boss/GPT-SoVITS](https://github.com/RVC-Boss/GPT-SoVITS) (giấy phép và điều khoản sử dụng model theo repo gốc).*
+
+---
+
+## 15. Hội thoại đa giọng
+
+Tạo đoạn hội thoại nhiều nhân vật, mỗi nhân vật một giọng clone khác nhau — hợp cho phim tài liệu có phỏng vấn, kịch audio, video 2 MC.
+
+**Chuẩn bị:** lưu sẵn ít nhất 2 voice profile (mục 9), engine đang chạy (đèn xanh).
+
+**Các bước:**
+
+1. Bấm **🎭 Hội thoại đa giọng…** (cạnh các nút Import).
+2. Dán kịch bản theo định dạng — mỗi lời thoại một dòng, mở đầu bằng `[Vai]`:
+
+   ```
+   [A] こんにちは、田中さん。
+   [B] ああ、佐藤さん！お久しぶりです。
+   [A] 最近どうですか？
+   ```
+
+   Dòng không có tag sẽ được nối vào lời thoại ngay phía trên. Tên vai tự do (`[A]`, `[MC nữ]`, `[Sếp]`…).
+3. Bấm **🔍 Quét vai** → bảng liệt kê các vai; chọn voice profile cho từng vai (vai trùng tên profile được gán tự động).
+4. Chọn ngôn ngữ đọc (hội thoại trộn ngôn ngữ → để `auto`) → **🎭 Tạo hội thoại**.
+
+**Kết quả:** thư mục `{timestamp}_dialogue` gồm `output.wav` (các lời thoại ghép liền, khoảng lặng giữa các lời = `fragment_interval` trong Nâng cao), `script.txt`, `meta.json`, kèm `output.mp3` / `output.srt` nếu bật các option Đầu ra. Phụ đề SRT có tên vai: `A: こんにちは…`.
+
+---
+
+## 16. CLI mode (chạy không cần GUI)
+
+Tự động hóa từ script/lịch chạy đêm — không cần mở app:
+
+```bat
+rem Liệt kê voice profiles đã lưu trong GUI
+.venv\Scripts\python.exe -m app.cli --list-profiles
+
+rem Đọc 3 chương bằng profile "MC nu", xuất SRT + audiobook + MP3
+.venv\Scripts\python.exe -m app.cli --profile "MC nu" ^
+    --input ch1.txt ch2.txt ch3.txt --lang ja --srt --audiobook --mp3
+
+rem Chỉ định trực tiếp audio mẫu, đọc cả thư mục
+.venv\Scripts\python.exe -m app.cli --ref voice.wav --prompt-text "..." --prompt-lang ja ^
+    --input-dir D:\chapters --lang ja --out D:\output
+```
+
+Điểm đáng chú ý:
+
+- Không truyền `--engine` thì dùng thư mục Engine trong settings của GUI; engine đang chạy sẵn thì CLI dùng luôn và **không** tắt khi xong; CLI tự khởi động engine thì mặc định tắt khi xong (giữ lại bằng `--keep-engine`).
+- Các tham số không truyền (tốc độ, cut, seed…) lấy theo settings hiện tại của GUI.
+- Đầy đủ option: `--mp3 --srt --normalize --audiobook --gap --speed --seed --cut --host --port`. Xem tất cả: `python -m app.cli --help`.
+- Exit code: `0` = tất cả thành công, `2` = một phần lỗi, `1` = thất bại — dùng được trong batch script.

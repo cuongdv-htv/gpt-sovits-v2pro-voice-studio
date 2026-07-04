@@ -95,6 +95,16 @@
 
 ## 4. Tổng quan giao diện
 
+Giao diện tiếng Việt (mặc định):
+
+![Giao diện chính - tiếng Việt](../assets/screenshot.png)
+
+Bấm nút **[日本語]** góc trên phải để chuyển toàn bộ giao diện sang tiếng Nhật (bấm **[VI]** để quay lại):
+
+![Giao diện chính - tiếng Nhật](images/main_ja.png)
+
+Sơ đồ bố cục:
+
 ```
 ┌────────────────────────────────────────────────────────────────────┐
 │  GPT-SoVITS v2Pro Voice Studio                        [ 日本語 ]   │  ← nút đổi ngôn ngữ UI
@@ -136,6 +146,8 @@
 
 ## 5. Bước 1 — Khởi động Engine
 
+![Panel Engine và Model](images/settings_engine.png)
+
 1. Mở app. Ô **Thư mục Engine** (panel phải) phải trỏ tới thư mục chứa `api_v2.py`
    (máy này đã điền sẵn: `D:\03_CODING\GPT-SoVITS-v2Pro\GPT-SoVITS-v2pro-20250604`).
 2. Bấm **▶ Khởi động engine**.
@@ -151,6 +163,8 @@ Ghi chú:
 ---
 
 ## 6. Bước 2 — Chuẩn bị giọng mẫu (quan trọng nhất)
+
+![Panel Giọng mẫu](images/voice_panel.png)
 
 Chất lượng audio mẫu quyết định phần lớn độ giống. Chuẩn bị như sau:
 
@@ -182,6 +196,8 @@ Bấm **+ Thêm** ở mục *Audio mẫu phụ* để thêm 1–5 đoạn thu â
 
 ## 7. Bước 3 — Tạo giọng nói
 
+![Panel nhập văn bản và hàng đợi](images/input_queue.png)
+
 ### Tạo một câu (nhập tay)
 
 1. Gõ văn bản vào ô **Văn bản cần đọc**.
@@ -189,7 +205,11 @@ Bấm **+ Thêm** ở mục *Audio mẫu phụ* để thêm 1–5 đoạn thu â
    - Biết chắc văn bản 1 ngôn ngữ → chọn đúng mã (`ja`, `en`…) — chính xác hơn `auto`.
    - Văn bản trộn (ví dụ Nhật lẫn Anh) → chọn `auto`.
 3. Bấm **🎙 Tạo (mục nhập tay)**.
-4. Theo dõi thanh tiến độ + Log. Xong sẽ:
+4. Theo dõi thanh tiến độ + Log (thanh trạng thái dưới cùng):
+
+   ![Vùng trạng thái, tiến độ, log và trình nghe thử](images/bottom_status.png)
+
+   Xong sẽ:
    - Tự nạp kết quả vào **trình nghe thử** dưới cùng — bấm ▶ nghe ngay.
    - Thêm 1 dòng vào tab **Kết quả** — bấm *Mở thư mục* để xem file.
 
@@ -253,6 +273,8 @@ Lưu ý: profile lưu **đường dẫn** tới file audio, không copy file. Di
 ---
 
 ## 10. Giải thích toàn bộ Settings
+
+![Panel Tổng hợp, Nâng cao và Đầu ra](images/settings_synth.png)
 
 ### Nhóm Model
 

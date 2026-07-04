@@ -58,7 +58,8 @@ class Settings:
     def load(self):
         try:
             if self.path.exists():
-                with open(self.path, "r", encoding="utf-8") as f:
+                # utf-8-sig: chịu được BOM nếu file bị công cụ khác ghi kèm BOM
+                with open(self.path, "r", encoding="utf-8-sig") as f:
                     loaded = json.load(f)
                 for k, v in loaded.items():
                     if k in DEFAULTS:

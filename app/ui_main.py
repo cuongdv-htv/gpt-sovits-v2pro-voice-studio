@@ -3,27 +3,31 @@
 (dưới) Engine status + Progress + Log/Results + audio player."""
 
 import os
+import time
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QUrl, Signal, Slot
+from PySide6.QtCore import Qt, QTimer, QUrl, Signal, Slot
 from PySide6.QtGui import QColor
 from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
 from PySide6.QtWidgets import (
     QCheckBox, QComboBox, QDoubleSpinBox, QFileDialog, QGroupBox, QHBoxLayout,
     QInputDialog, QLabel, QLineEdit, QListWidget, QMessageBox, QPlainTextEdit,
     QProgressBar, QPushButton, QScrollArea, QSlider, QSpinBox, QSplitter,
-    QTableWidget, QTableWidgetItem, QTabWidget, QTextEdit, QVBoxLayout, QWidget,
+    QStyle, QSystemTrayIcon, QTableWidget, QTableWidgetItem, QTabWidget,
+    QTextEdit, QVBoxLayout, QWidget,
     QHeaderView, QAbstractItemView, QFormLayout, QSizePolicy,
 )
 
 from app.engine_client import GptSovitsClient
 from app.engine_manager import EngineManager
+from app.history import append_history, load_history
 from app.i18n import CUT_METHODS, I18n, PROMPT_LANGS, TEXT_LANGS
 from app.profiles import ProfileStore, VoiceProfile
-from app.settings import Settings
+from app.settings import Settings, config_dir
+from app.transcribe import TranscribeWorker, WHISPER_TO_PROMPT_LANG
 from app.trim_dialog import TrimDialog
 from app.worker import (BatchWorker, EngineStartWorker, ModelApplyWorker,
-                        QueueItem, TtsJobConfig)
+                        PreviewWorker, QueueItem, TtsJobConfig)
 
 AUDIO_FILTER = "Audio (*.wav *.mp3 *.flac *.ogg *.m4a);;All files (*.*)"
 
@@ -72,6 +76,43 @@ class DropLineEdit(QLineEdit):
             path = urls[0].toLocalFile()
             self.setText(path)
             self.fileDropped.emit(path)
+
+
+class DropTableWidget(QTableWidget):
+    """Bảng hàng đợi nhận kéo-thả file .txt / thư mục từ Explorer."""
+
+    filesDropped = Signal(list)  # danh sách đường dẫn .txt
+
+    def __init__(self, rows, cols, parent=None):
+        super().__init__(rows, cols, parent)
+        self.setAcceptDrops(True)
+
+    def dragEnterEvent(self, e):
+        if e.mimeData().hasUrls():
+            e.acceptProposedAction()
+        else:
+            super().dragEnterEvent(e)
+
+    def dragMoveEvent(self, e):
+        if e.mimeData().hasUrls():
+            e.acceptProposedAction()
+        else:
+            super().dragMoveEvent(e)
+
+    def dropEvent(self, e):
+        if not e.mimeData().hasUrls():
+            super().dropEvent(e)
+            return
+        paths = []
+        for url in e.mimeData().urls():
+            p = Path(url.toLocalFile())
+            if p.is_dir():
+                paths.extend(sorted(str(x) for x in p.glob("*.txt")))
+            elif p.suffix.lower() == ".txt":
+                paths.append(str(p))
+        if paths:
+            self.filesDropped.emit(paths)
+        e.acceptProposedAction()
 
 
 class AudioPlayer(QWidget):
@@ -157,11 +198,34 @@ class MainWindow(QWidget):
         self.model_worker: ModelApplyWorker | None = None
         self.engine_state = "stopped"
 
+        self.preview_worker: PreviewWorker | None = None
+        self.transcribe_worker: TranscribeWorker | None = None
+        self._eta_chars_done = 0
+        self._eta_secs_done = 0.0
+        self._item_t0 = 0.0
+
         self.setStyleSheet(STYLE)
         self._build_ui()
         self._load_from_settings()
         self.retranslate()
         self.resize(1360, 860)
+
+        # Khay hệ thống — để bắn thông báo Windows khi batch xong
+        self.tray = QSystemTrayIcon(
+            self.style().standardIcon(QStyle.SP_MediaVolume), self)
+        self.tray.setToolTip("GPT-SoVITS v2Pro Voice Studio")
+        self.tray.setVisible(True)
+
+        # Lịch sử kết quả từ các phiên trước (chỉ hiện thư mục còn tồn tại)
+        for d in load_history():
+            if Path(d).is_dir():
+                self._add_result_row(d, record=False)
+
+        # Tự khởi động engine nếu được bật và đường dẫn hợp lệ
+        if (self.settings.get("auto_start_engine")
+                and self.engine.find_api_script(
+                    self.settings.get("engine_folder") or "")):
+            QTimer.singleShot(600, self._start_engine)
 
     # ==================================================================
     # UI BUILD
@@ -223,6 +287,8 @@ class MainWindow(QWidget):
             self.cmb_prompt_lang.addItem(c, c)
         h2.addWidget(self.lbl_prompt_lang)
         h2.addWidget(self.cmb_prompt_lang)
+        self.btn_transcribe = QPushButton()
+        h2.addWidget(self.btn_transcribe)
         h2.addStretch(1)
         vl.addLayout(h2)
 
@@ -268,6 +334,8 @@ class MainWindow(QWidget):
         hi.addWidget(self.lbl_text_lang)
         hi.addWidget(self.cmb_text_lang)
         hi.addStretch(1)
+        self.btn_preview = QPushButton()
+        hi.addWidget(self.btn_preview)
         self.btn_generate = QPushButton()
         self.btn_generate.setObjectName("primary")
         hi.addWidget(self.btn_generate)
@@ -286,22 +354,32 @@ class MainWindow(QWidget):
         # --- Queue ---
         self.grp_queue = QGroupBox()
         ql = QVBoxLayout(self.grp_queue)
-        self.tbl_queue = QTableWidget(0, 4)
+        self.tbl_queue = DropTableWidget(0, 4)
         self.tbl_queue.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.tbl_queue.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.tbl_queue.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
         ql.addWidget(self.tbl_queue, 1)
         hq = QHBoxLayout()
+        self.btn_q_up = QPushButton("⬆")
+        self.btn_q_up.setFixedWidth(36)
+        self.btn_q_down = QPushButton("⬇")
+        self.btn_q_down.setFixedWidth(36)
+        self.btn_q_edit = QPushButton()
         self.btn_q_remove = QPushButton()
         self.btn_q_clear = QPushButton()
+        hq.addWidget(self.btn_q_up)
+        hq.addWidget(self.btn_q_down)
+        hq.addWidget(self.btn_q_edit)
         hq.addWidget(self.btn_q_remove)
         hq.addWidget(self.btn_q_clear)
         hq.addStretch(1)
+        self.btn_retry = QPushButton()
         self.btn_generate_all = QPushButton()
         self.btn_generate_all.setObjectName("primary")
         self.btn_cancel = QPushButton()
         self.btn_cancel.setObjectName("danger")
         self.btn_cancel.setEnabled(False)
+        hq.addWidget(self.btn_retry)
         hq.addWidget(self.btn_generate_all)
         hq.addWidget(self.btn_cancel)
         ql.addLayout(hq)
@@ -339,6 +417,8 @@ class MainWindow(QWidget):
         hh.addWidget(self.lbl_port)
         hh.addWidget(self.sp_port)
         ef.addRow(self.lbl_host, hh)
+        self.chk_autostart = QCheckBox()
+        ef.addRow("", self.chk_autostart)
         hs = QHBoxLayout()
         self.btn_engine_start = QPushButton()
         self.btn_engine_start.setObjectName("primary")
@@ -486,6 +566,9 @@ class MainWindow(QWidget):
         hb.addWidget(self.pb_item)
         hb.addWidget(self.lbl_prog_total)
         hb.addWidget(self.pb_total)
+        self.lbl_eta = QLabel("")
+        self.lbl_eta.setStyleSheet("color:#556; font-weight:600;")
+        hb.addWidget(self.lbl_eta)
         hb.addStretch(1)
         bl.addLayout(hb)
 
@@ -514,6 +597,13 @@ class MainWindow(QWidget):
         self.btn_ref_browse.clicked.connect(self._browse_ref)
         self.btn_ref_play.clicked.connect(lambda: self.player.play(self.ed_ref.text()))
         self.btn_ref_trim.clicked.connect(self._open_trim_dialog)
+        self.btn_transcribe.clicked.connect(self._transcribe_ref)
+        self.btn_preview.clicked.connect(self._preview_one)
+        self.btn_q_up.clicked.connect(lambda: self._move_queue_item(-1))
+        self.btn_q_down.clicked.connect(lambda: self._move_queue_item(1))
+        self.btn_q_edit.clicked.connect(self._edit_queue_item)
+        self.btn_retry.clicked.connect(self._retry_errors)
+        self.tbl_queue.filesDropped.connect(self._add_txt_files)
         self.chk_audiobook.toggled.connect(self.sp_gap.setEnabled)
         self.btn_aux_add.clicked.connect(self._add_aux)
         self.btn_aux_del.clicked.connect(self._del_aux)
@@ -550,7 +640,7 @@ class MainWindow(QWidget):
         self.setWindowTitle(tr("app_title"))
         self.lbl_title.setText(tr("app_title"))
         self.lbl_note.setText(tr("vi_not_supported_note"))
-        self.btn_lang.setText(tr("btn_lang_toggle"))
+        self.btn_lang.setText(self.i18n.next_lang_label())
 
         self.grp_voice.setTitle(tr("grp_voice"))
         self.lbl_ref.setText(tr("ref_audio"))
@@ -562,6 +652,8 @@ class MainWindow(QWidget):
         self.lbl_prompt.setText(tr("prompt_text"))
         self.ed_prompt.setPlaceholderText(tr("prompt_text_placeholder"))
         self.lbl_prompt_lang.setText(tr("prompt_lang"))
+        self.btn_transcribe.setText(tr("btn_transcribe"))
+        self.btn_transcribe.setToolTip(tr("transcribe_tooltip"))
         self.lbl_aux.setText(tr("aux_refs"))
         self.btn_aux_add.setText(tr("btn_add_aux"))
         self.btn_aux_del.setText(tr("btn_remove_aux"))
@@ -581,13 +673,20 @@ class MainWindow(QWidget):
         self.btn_import_txt.setText(tr("btn_import_txt"))
         self.btn_import_dir.setText(tr("btn_import_folder"))
         self.btn_generate.setText(tr("btn_generate"))
+        self.btn_preview.setText(tr("btn_preview"))
+        self.btn_preview.setToolTip(tr("preview_tooltip"))
 
         self.grp_queue.setTitle(tr("grp_queue"))
         self.tbl_queue.setHorizontalHeaderLabels([
             tr("queue_col_name"), tr("queue_col_lang"),
             tr("queue_col_chars"), tr("queue_col_status")])
+        self.tbl_queue.setToolTip(tr("queue_drop_hint"))
+        self.btn_q_up.setToolTip(tr("tip_move_up"))
+        self.btn_q_down.setToolTip(tr("tip_move_down"))
+        self.btn_q_edit.setText(tr("btn_edit_item"))
         self.btn_q_remove.setText(tr("btn_remove_item"))
         self.btn_q_clear.setText(tr("btn_clear_queue"))
+        self.btn_retry.setText(tr("btn_retry_errors"))
         self.btn_generate_all.setText(tr("btn_generate_all"))
         self.btn_cancel.setText(tr("btn_cancel_batch"))
 
@@ -598,6 +697,7 @@ class MainWindow(QWidget):
         self.btn_engine_browse.setText(tr("browse"))
         self.lbl_host.setText(tr("host"))
         self.lbl_port.setText(tr("port"))
+        self.chk_autostart.setText(tr("auto_start_engine"))
         self.btn_engine_start.setText(tr("btn_start_engine"))
         self.btn_engine_stop.setText(tr("btn_stop_engine"))
 
@@ -665,6 +765,7 @@ class MainWindow(QWidget):
         self.ed_engine_python.setText(s.get("engine_python"))
         self.ed_host.setText(s.get("host"))
         self.sp_port.setValue(int(s.get("port")))
+        self.chk_autostart.setChecked(bool(s.get("auto_start_engine")))
         self.cmb_variant.setCurrentText(s.get("model_variant"))
         self.ed_gpt.setText(s.get("gpt_weights"))
         self.ed_sovits.setText(s.get("sovits_weights"))
@@ -711,6 +812,7 @@ class MainWindow(QWidget):
             engine_python=self.ed_engine_python.text().strip(),
             host=self.ed_host.text().strip() or "127.0.0.1",
             port=self.sp_port.value(),
+            auto_start_engine=self.chk_autostart.isChecked(),
             model_variant=self.cmb_variant.currentText(),
             gpt_weights=self.ed_gpt.text().strip(),
             sovits_weights=self.ed_sovits.text().strip(),
@@ -968,25 +1070,33 @@ class MainWindow(QWidget):
         w.sig_audiobook_done.connect(self._on_audiobook_done)
         w.sig_batch_finished.connect(self._on_batch_finished)
         self.pb_total.setValue(0)
-        self.pb_total.setMaximum(len(items))
+        self.pb_total.setMaximum(
+            max(1, len([it for it in items if it.status == "pending"])))
         self.pb_item.setValue(0)
+        self._eta_chars_done = 0
+        self._eta_secs_done = 0.0
+        self.lbl_eta.clear()
         self._set_busy(True)
         w.start()
 
     def _set_busy(self, busy: bool):
         self.btn_generate.setEnabled(not busy)
         self.btn_generate_all.setEnabled(not busy)
+        self.btn_retry.setEnabled(not busy)
+        self.btn_preview.setEnabled(not busy)
         self.btn_cancel.setEnabled(busy)
         self.btn_apply_model.setEnabled(not busy)
 
     @Slot(int)
     def _on_item_started(self, idx: int):
+        self._item_t0 = time.time()
         if not self._batch_standalone and 0 <= idx < len(self.queue):
             self.queue[idx].status = "running"
             self._refresh_queue_table()
 
     @Slot(int, str, str)
     def _on_item_finished(self, idx: int, status: str, payload: str):
+        self._update_eta(idx, status)
         if not self._batch_standalone:
             self._refresh_queue_table()
         if status == "done" and payload:
@@ -1006,17 +1116,151 @@ class MainWindow(QWidget):
     @Slot(int, int, bool)
     def _on_batch_finished(self, ok: int, fail: int, cancelled: bool):
         self._set_busy(False)
+        self.lbl_eta.clear()
         tr = self.i18n.tr
         if cancelled:
             self.append_log(tr("msg_batch_cancelled"))
         total = self.pb_total.maximum()
-        self.append_log(tr("msg_batch_done").format(ok=ok, fail=fail, total=total))
+        summary = tr("msg_batch_done").format(ok=ok, fail=fail, total=total)
+        self.append_log(summary)
+        # Thông báo Windows — hữu ích khi chạy batch dài rồi làm việc khác
+        if not cancelled and hasattr(self, "tray"):
+            self.tray.showMessage(tr("notif_batch_title"), summary,
+                                  QSystemTrayIcon.Information, 8000)
         self.batch_worker = None
+
+    def _update_eta(self, idx: int, status: str):
+        """Ước tính thời gian còn lại theo tốc độ trung bình (giây/ký tự)."""
+        if not self.batch_worker or not self._item_t0:
+            return
+        items = self.batch_worker.items
+        if status == "done" and 0 <= idx < len(items):
+            self._eta_secs_done += time.time() - self._item_t0
+            self._eta_chars_done += items[idx].chars
+        if self._eta_chars_done <= 0:
+            return
+        remaining_chars = sum(it.chars for it in items if it.status == "pending")
+        if remaining_chars <= 0:
+            self.lbl_eta.clear()
+            return
+        eta = self._eta_secs_done / self._eta_chars_done * remaining_chars
+        m, s = divmod(int(eta), 60)
+        h, m = divmod(m, 60)
+        txt = f"{h}h{m:02d}m" if h else (f"{m}m{s:02d}s" if m else f"{s}s")
+        self.lbl_eta.setText(f"{self.i18n.tr('eta_prefix')} {txt}")
 
     def _cancel_batch(self):
         if self.batch_worker:
             self.batch_worker.cancel()
             self.btn_cancel.setEnabled(False)
+
+    # ==================================================================
+    # Thử 1 câu / chạy lại mục lỗi / chỉnh hàng đợi
+    # ==================================================================
+    def _preview_one(self):
+        tr = self.i18n.tr
+        # Nguồn văn bản: mục đang chọn trong queue → ô nhập tay → mục đầu queue
+        text, lang = "", "auto"
+        rows = sorted({i.row() for i in self.tbl_queue.selectedIndexes()})
+        if rows and 0 <= rows[0] < len(self.queue):
+            it = self.queue[rows[0]]
+            text, lang = it.text, it.text_lang
+        elif self.ed_text.toPlainText().strip():
+            text, lang = self.ed_text.toPlainText().strip(), self._current_text_lang()
+        elif self.queue:
+            text, lang = self.queue[0].text, self.queue[0].text_lang
+        if not text.strip():
+            self._warn(tr("msg_need_text"))
+            return
+        if not self._validate_before_tts():
+            return
+        out_path = str(config_dir() / "preview.wav")
+        self.btn_preview.setEnabled(False)
+        self.append_log(tr("preview_generating"))
+        self.preview_worker = PreviewWorker(self.client, self._make_cfg(),
+                                            text, lang, out_path)
+        self.preview_worker.sig_done.connect(self._on_preview_done)
+        self.preview_worker.start()
+
+    @Slot(bool, str)
+    def _on_preview_done(self, ok: bool, payload: str):
+        self.btn_preview.setEnabled(True)
+        if ok:
+            self.append_log(self.i18n.tr("preview_done"))
+            self.player.play(payload)
+        else:
+            self._warn(payload)
+        self.preview_worker = None
+
+    def _retry_errors(self):
+        tr = self.i18n.tr
+        err_items = [it for it in self.queue if it.status == "error"]
+        if not err_items:
+            self._warn(tr("msg_no_error_items"))
+            return
+        if not self._validate_before_tts():
+            return
+        for it in err_items:
+            it.status = "pending"
+            it.error = ""
+        self._refresh_queue_table()
+        self._run_batch(self.queue, standalone=False)
+
+    def _move_queue_item(self, delta: int):
+        rows = sorted({i.row() for i in self.tbl_queue.selectedIndexes()})
+        if len(rows) != 1:
+            return
+        r, nr = rows[0], rows[0] + delta
+        if 0 <= r < len(self.queue) and 0 <= nr < len(self.queue):
+            self.queue[r], self.queue[nr] = self.queue[nr], self.queue[r]
+            self._refresh_queue_table()
+            self.tbl_queue.selectRow(nr)
+
+    def _edit_queue_item(self):
+        rows = sorted({i.row() for i in self.tbl_queue.selectedIndexes()})
+        if len(rows) != 1 or not (0 <= rows[0] < len(self.queue)):
+            return
+        item = self.queue[rows[0]]
+        tr = self.i18n.tr
+        text, ok = QInputDialog.getMultiLineText(
+            self, tr("btn_edit_item"),
+            f"{tr('edit_item_title')} {item.name}", item.text)
+        if ok:
+            item.text = text
+            item.status = "pending"
+            item.error = ""
+            self._refresh_queue_table()
+            self.tbl_queue.selectRow(rows[0])
+
+    # ==================================================================
+    # Whisper: tự nhận dạng prompt_text
+    # ==================================================================
+    def _transcribe_ref(self):
+        tr = self.i18n.tr
+        path = self.ed_ref.text().strip()
+        if not path or not Path(path).is_file():
+            self._warn(tr("msg_need_ref"))
+            return
+        self.btn_transcribe.setEnabled(False)
+        self.append_log(tr("transcribe_running"))
+        self.transcribe_worker = TranscribeWorker(path)
+        self.transcribe_worker.sig_done.connect(self._on_transcribed)
+        self.transcribe_worker.start()
+
+    @Slot(bool, str, str)
+    def _on_transcribed(self, ok: bool, text: str, info: str):
+        tr = self.i18n.tr
+        self.btn_transcribe.setEnabled(True)
+        self.transcribe_worker = None
+        if not ok:
+            self._warn(tr("transcribe_missing") if info == "missing"
+                       else f"{tr('transcribe_failed')}\n{info}")
+            return
+        self.ed_prompt.setPlainText(text)
+        lang = WHISPER_TO_PROMPT_LANG.get(info)
+        if lang:
+            self._set_combo_data(self.cmb_prompt_lang, lang)
+        self.append_log(f"{tr('transcribe_done')} [{info}]")
 
     @Slot(str)
     def _on_audiobook_done(self, out_dir: str):
@@ -1044,7 +1288,9 @@ class MainWindow(QWidget):
     # ==================================================================
     # Results
     # ==================================================================
-    def _add_result_row(self, out_dir: str):
+    def _add_result_row(self, out_dir: str, record: bool = True):
+        if record:
+            append_history(out_dir)
         t = self.tbl_results
         r = t.rowCount()
         t.insertRow(r)

@@ -120,11 +120,16 @@ class BatchWorker(QThread):
 
     def run(self):
         ok = fail = 0
-        total = len(self.items)
+        # Chỉ xử lý các mục "pending" — cho phép "Chạy lại mục lỗi" mà không
+        # đụng tới các mục đã xong.
+        targets = [i for i, it in enumerate(self.items) if it.status == "pending"]
+        total = len(targets)
+        done_count = 0
         # (item, srt_entries) của các mục thành công — cho chế độ audiobook
         merged_parts: list = []
 
-        for i, item in enumerate(self.items):
+        for i in targets:
+            item = self.items[i]
             if self._cancel:
                 break
             self.sig_item_started.emit(i)
@@ -134,7 +139,8 @@ class BatchWorker(QThread):
                 item.status = "skipped"
                 self.sig_log.emit(f"⚠ skip (empty): {item.name}")
                 self.sig_item_finished.emit(i, "skipped", "")
-                self.sig_total_progress.emit(i + 1, total)
+                done_count += 1
+                self.sig_total_progress.emit(done_count, total)
                 continue
 
             # Seed thực tế: -1 → sinh ngẫu nhiên để tái lập được (ghi vào meta)
@@ -215,7 +221,8 @@ class BatchWorker(QThread):
                 self.sig_log.emit(f"✗ {item.name}: {e}")
                 self.sig_item_finished.emit(i, "error", str(e))
 
-            self.sig_total_progress.emit(i + 1, total)
+            done_count += 1
+            self.sig_total_progress.emit(done_count, total)
 
         # ---- Audiobook: ghép các mục thành công thành 1 file ----
         if self.cfg.audiobook_merge and merged_parts and not self._cancel:
@@ -266,6 +273,52 @@ class BatchWorker(QThread):
 
 class _CancelledMidItem(Exception):
     """Người dùng bấm Hủy giữa lúc đang tổng hợp từng câu."""
+
+
+class PreviewWorker(QThread):
+    """'Thử 1 câu': tổng hợp CÂU ĐẦU TIÊN của văn bản và lưu ra file tạm."""
+
+    sig_done = Signal(bool, str)  # ok, wav_path | error_message
+
+    def __init__(self, client: GptSovitsClient, cfg: TtsJobConfig,
+                 text: str, text_lang: str, out_path: str, parent=None):
+        super().__init__(parent)
+        self.client = client
+        self.cfg = cfg
+        self.text = text
+        self.text_lang = text_lang
+        self.out_path = out_path
+
+    def run(self):
+        try:
+            sentences = split_sentences(self.text)
+            sent = sentences[0] if sentences else self.text.strip()[:200]
+            seed = self.cfg.seed
+            if seed is None or int(seed) < 0:
+                seed = random.randint(0, 2**31 - 1)
+            wav = self.client.tts(
+                text=sent,
+                text_lang=self.text_lang,
+                ref_audio_path=self.cfg.ref_audio_path,
+                prompt_text=self.cfg.prompt_text,
+                prompt_lang=self.cfg.prompt_lang,
+                aux_ref_audio_paths=self.cfg.aux_ref_audio_paths,
+                speed_factor=self.cfg.speed_factor,
+                text_split_method="cut0",
+                batch_size=self.cfg.batch_size,
+                top_k=self.cfg.top_k,
+                top_p=self.cfg.top_p,
+                temperature=self.cfg.temperature,
+                repetition_penalty=self.cfg.repetition_penalty,
+                fragment_interval=self.cfg.fragment_interval,
+                seed=seed,
+                media_type="wav",
+            )
+            with open(self.out_path, "wb") as f:
+                f.write(wav)
+            self.sig_done.emit(True, self.out_path)
+        except Exception as e:
+            self.sig_done.emit(False, str(e))
 
 
 class EngineStartWorker(QThread):

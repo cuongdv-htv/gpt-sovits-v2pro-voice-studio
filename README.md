@@ -8,7 +8,7 @@
 
 ![GPT-SoVITS v2Pro Voice Studio](assets/screenshot.png)
 
-**Tính năng chính / 主な機能:** voice clone 3–10s (zero/few-shot) · đọc 5 ngôn ngữ + cross-language · batch từ `.txt` · **cắt audio mẫu trên waveform** · **xuất phụ đề `.srt` khớp từng câu** · **chuẩn hóa loudness −14 LUFS (YouTube)** · **ghép batch thành audiobook** (`merged.wav` + `merged.srt`) · WAV/MP3 · voice profiles · UI song ngữ VI/JA
+**Tính năng chính / 主な機能:** voice clone 3–10s (zero/few-shot) · đọc 5 ngôn ngữ + cross-language · batch từ `.txt` (kéo-thả, sắp xếp, sửa mục, chạy lại mục lỗi, ETA, thông báo Windows) · **cắt audio mẫu trên waveform** · **🎤 tự nhận dạng lời thoại mẫu (Whisper local)** · **xuất phụ đề `.srt` khớp từng câu** · **chuẩn hóa loudness −14 LUFS (YouTube)** · **ghép batch thành audiobook** (`merged.wav` + `merged.srt`) · thử 1 câu trước khi chạy batch · tự khởi động engine · lịch sử kết quả · WAV/MP3 · voice profiles · UI 3 ngôn ngữ VI/JA/EN
 
 ---
 

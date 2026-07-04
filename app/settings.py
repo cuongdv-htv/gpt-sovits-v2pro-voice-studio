@@ -23,6 +23,7 @@ DEFAULTS = {
     "engine_python": "",                # để trống = tự dò runtime\python.exe
     "host": "127.0.0.1",
     "port": 9880,
+    "auto_start_engine": False,         # tự khởi động engine khi mở app
     # Model
     "model_variant": "v2Pro",           # v2Pro | v2ProPlus
     "gpt_weights": "",

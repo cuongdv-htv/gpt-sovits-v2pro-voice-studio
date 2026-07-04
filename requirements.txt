@@ -1,0 +1,8 @@
+# GUI environment - lightweight, NO torch/GPT-SoVITS (engine has its own env)
+PySide6>=6.6
+requests>=2.31
+soundfile>=0.12
+numpy>=1.24
+# Optional: MP3 export
+pydub>=0.25
+imageio-ffmpeg>=0.4.9

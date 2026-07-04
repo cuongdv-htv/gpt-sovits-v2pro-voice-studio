@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# PyInstaller
+build/
+dist/
+*.spec
+
+# App runtime data (settings/profiles nam trong %APPDATA%, khong o day)
+*.log
+
+# OS
+Thumbs.db
+desktop.ini
+
+# Engine (neu nguoi dung giai nen goi GPT-SoVITS vao trong repo)
+GPT-SoVITS-v2pro*/
+engine/
+*.7z
+
+# Ket qua tao giong (san pham nguoi dung, khong commit)
+output/
+test_output/

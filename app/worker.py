@@ -55,6 +55,65 @@ class TtsJobConfig:
     audiobook_gap: float = 0.8        # khoảng lặng giữa các mục (giây)
 
 
+class SynthCancelled(Exception):
+    """Bị hủy giữa lúc tổng hợp (người dùng bấm Hủy)."""
+
+
+def tts_once(client: GptSovitsClient, cfg: TtsJobConfig, text: str,
+             text_lang: str, seed: int, split_method: str) -> bytes:
+    """Một lời gọi /tts với đầy đủ tham số từ cfg."""
+    return client.tts(
+        text=text,
+        text_lang=text_lang,
+        ref_audio_path=cfg.ref_audio_path,
+        prompt_text=cfg.prompt_text,
+        prompt_lang=cfg.prompt_lang,
+        aux_ref_audio_paths=cfg.aux_ref_audio_paths,
+        speed_factor=cfg.speed_factor,
+        text_split_method=split_method,
+        batch_size=cfg.batch_size,
+        top_k=cfg.top_k,
+        top_p=cfg.top_p,
+        temperature=cfg.temperature,
+        repetition_penalty=cfg.repetition_penalty,
+        fragment_interval=cfg.fragment_interval,
+        seed=seed,
+        media_type="wav",
+    )
+
+
+def synthesize_one(client: GptSovitsClient, cfg: TtsJobConfig, text: str,
+                   text_lang: str, seed: int,
+                   progress_cb=None, cancel_cb=None):
+    """Lõi tổng hợp một văn bản — dùng chung cho GUI batch, hội thoại và CLI.
+
+    cfg.export_srt=True → tổng hợp TỪNG CÂU lấy timestamp chính xác.
+    Trả về (wav_bytes, srt_entries | None);
+    entries: [(start, end, text), ...] tính cả khoảng lặng fragment_interval."""
+    progress_cb = progress_cb or (lambda p: None)
+    cancel_cb = cancel_cb or (lambda: False)
+
+    if not cfg.export_srt:
+        wav = tts_once(client, cfg, text, text_lang, seed,
+                       cfg.text_split_method)
+        return wav, None
+
+    sentences = split_sentences(text) or [text.strip()]
+    gap = float(cfg.fragment_interval)
+    segments, entries = [], []
+    t = 0.0
+    for k, sent in enumerate(sentences):
+        if cancel_cb():
+            raise SynthCancelled()
+        wav = tts_once(client, cfg, sent, text_lang, seed, "cut0")
+        dur = wav_duration(wav)
+        entries.append((t, t + dur, sent))
+        segments.append(wav)
+        t += dur + gap
+        progress_cb(int(10 + 70 * (k + 1) / len(sentences)))
+    return concat_with_silence(segments, gap), entries
+
+
 class BatchWorker(QThread):
     """Xử lý tuần tự hàng đợi; 1 mục lỗi KHÔNG làm sập batch."""
 
@@ -76,47 +135,6 @@ class BatchWorker(QThread):
 
     def cancel(self):
         self._cancel = True
-
-    def _tts_once(self, text: str, text_lang: str, seed: int,
-                  split_method: str) -> bytes:
-        return self.client.tts(
-            text=text,
-            text_lang=text_lang,
-            ref_audio_path=self.cfg.ref_audio_path,
-            prompt_text=self.cfg.prompt_text,
-            prompt_lang=self.cfg.prompt_lang,
-            aux_ref_audio_paths=self.cfg.aux_ref_audio_paths,
-            speed_factor=self.cfg.speed_factor,
-            text_split_method=split_method,
-            batch_size=self.cfg.batch_size,
-            top_k=self.cfg.top_k,
-            top_p=self.cfg.top_p,
-            temperature=self.cfg.temperature,
-            repetition_penalty=self.cfg.repetition_penalty,
-            fragment_interval=self.cfg.fragment_interval,
-            seed=seed,
-            media_type="wav",
-        )
-
-    def _synthesize_with_srt(self, item: QueueItem, seed: int):
-        """Tổng hợp TỪNG CÂU để lấy timestamp chính xác → (wav_bytes, entries).
-        entries: [(start, end, text), ...] tính cả khoảng lặng fragment_interval."""
-        sentences = split_sentences(item.text)
-        if not sentences:
-            sentences = [item.text.strip()]
-        gap = float(self.cfg.fragment_interval)
-        segments, entries = [], []
-        t = 0.0
-        for k, sent in enumerate(sentences):
-            if self._cancel:
-                raise _CancelledMidItem()
-            wav = self._tts_once(sent, item.text_lang, seed, "cut0")
-            dur = wav_duration(wav)
-            entries.append((t, t + dur, sent))
-            segments.append(wav)
-            t += dur + gap
-            self.sig_item_progress.emit(int(10 + 70 * (k + 1) / len(sentences)))
-        return concat_with_silence(segments, gap), entries
 
     def run(self):
         ok = fail = 0
@@ -152,12 +170,11 @@ class BatchWorker(QThread):
                 self.sig_item_progress.emit(5)
                 self.sig_log.emit(f"▶ TTS [{item.text_lang}] {item.name} ({item.chars} chars)")
 
-                srt_entries = None
-                if self.cfg.export_srt:
-                    wav, srt_entries = self._synthesize_with_srt(item, actual_seed)
-                else:
-                    wav = self._tts_once(item.text, item.text_lang, actual_seed,
-                                         self.cfg.text_split_method)
+                wav, srt_entries = synthesize_one(
+                    self.client, self.cfg, item.text, item.text_lang,
+                    actual_seed,
+                    progress_cb=self.sig_item_progress.emit,
+                    cancel_cb=lambda: self._cancel)
                 self.sig_item_progress.emit(80)
 
                 if self.cfg.normalize_loudness:
@@ -205,7 +222,7 @@ class BatchWorker(QThread):
                 self.sig_item_progress.emit(100)
                 self.sig_log.emit(f"✓ saved: {out_dir}")
                 self.sig_item_finished.emit(i, "done", str(out_dir))
-            except _CancelledMidItem:
+            except SynthCancelled:
                 item.status = "skipped"
                 self.sig_log.emit(f"⚠ cancelled mid-item: {item.name}")
                 self.sig_item_finished.emit(i, "skipped", "")
@@ -269,10 +286,6 @@ class BatchWorker(QThread):
         self.sig_log.emit(f"📚 audiobook: {out_dir} ({len(parts)} parts, "
                           f"{meta['duration_seconds']}s)")
         self.sig_audiobook_done.emit(str(out_dir))
-
-
-class _CancelledMidItem(Exception):
-    """Người dùng bấm Hủy giữa lúc đang tổng hợp từng câu."""
 
 
 class PreviewWorker(QThread):

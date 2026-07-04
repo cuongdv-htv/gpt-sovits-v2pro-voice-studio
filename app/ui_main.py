@@ -360,9 +360,11 @@ class MainWindow(QWidget):
         self.btn_add_queue = QPushButton()
         self.btn_import_txt = QPushButton()
         self.btn_import_dir = QPushButton()
+        self.btn_dialogue = QPushButton()
         hi2.addWidget(self.btn_add_queue)
         hi2.addWidget(self.btn_import_txt)
         hi2.addWidget(self.btn_import_dir)
+        hi2.addWidget(self.btn_dialogue)
         hi2.addStretch(1)
         il.addLayout(hi2)
         ll.addWidget(self.grp_input)
@@ -618,6 +620,7 @@ class MainWindow(QWidget):
         self.btn_ref_trim.clicked.connect(self._open_trim_dialog)
         self.btn_transcribe.clicked.connect(self._transcribe_ref)
         self.btn_preview.clicked.connect(self._preview_one)
+        self.btn_dialogue.clicked.connect(self._open_dialogue)
         self.btn_q_up.clicked.connect(lambda: self._move_queue_item(-1))
         self.btn_q_down.clicked.connect(lambda: self._move_queue_item(1))
         self.btn_q_edit.clicked.connect(self._edit_queue_item)
@@ -691,6 +694,8 @@ class MainWindow(QWidget):
         self.btn_add_queue.setText(tr("btn_add_to_queue"))
         self.btn_import_txt.setText(tr("btn_import_txt"))
         self.btn_import_dir.setText(tr("btn_import_folder"))
+        self.btn_dialogue.setText(tr("btn_dialogue"))
+        self.btn_dialogue.setToolTip(tr("dlg_hint"))
         self.btn_generate.setText(tr("btn_generate"))
         self.btn_preview.setText(tr("btn_preview"))
         self.btn_preview.setToolTip(tr("preview_tooltip"))
@@ -1263,6 +1268,27 @@ class MainWindow(QWidget):
             item.error = ""
             self._refresh_queue_table()
             self.tbl_queue.selectRow(rows[0])
+
+    # ==================================================================
+    # Hội thoại đa giọng
+    # ==================================================================
+    def _open_dialogue(self):
+        tr = self.i18n.tr
+        if not self.profiles.names():
+            self._warn(tr("dlg_need_profiles"))
+            return
+        if self.engine_state != "ready" or not self.client.is_alive():
+            self._warn(tr("engine_not_ready_msg"))
+            return
+        from app.dialogue_dialog import DialogueDialog
+        dlg = DialogueDialog(self.i18n, self.profiles, self.client,
+                             self._make_cfg, self)
+        if dlg.exec() and dlg.result_dir:
+            self.append_log(f"🎭 {tr('dlg_done')} {dlg.result_dir}")
+            self._add_result_row(dlg.result_dir)
+            out_wav = Path(dlg.result_dir) / "output.wav"
+            if out_wav.is_file():
+                self.player.play(str(out_wav))
 
     # ==================================================================
     # Whisper: tự nhận dạng prompt_text

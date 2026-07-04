@@ -17,6 +17,8 @@ if not exist ".venv\Scripts\python.exe" (
 ".venv\Scripts\python.exe" -m PyInstaller ^
     --noconfirm --clean --onedir --windowed ^
     --name VoiceStudio ^
+    --icon assets\icon.ico ^
+    --add-data "assets;assets" ^
     --collect-submodules PySide6 ^
     --collect-binaries PySide6 ^
     --hidden-import soundfile ^

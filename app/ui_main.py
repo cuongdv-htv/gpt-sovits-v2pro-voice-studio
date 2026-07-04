@@ -20,12 +20,15 @@ from PySide6.QtWidgets import (
 
 from app.engine_client import GptSovitsClient
 from app.engine_manager import EngineManager
+from app.errors import classify_error
 from app.history import append_history, load_history
 from app.i18n import CUT_METHODS, I18n, PROMPT_LANGS, TEXT_LANGS
-from app.profiles import ProfileStore, VoiceProfile
+from app.profiles import (ProfileStore, VoiceProfile, delete_voice_files,
+                          store_voice_files)
 from app.settings import Settings, config_dir
 from app.transcribe import TranscribeWorker, WHISPER_TO_PROMPT_LANG
 from app.trim_dialog import TrimDialog
+from app.vram import VramMonitor
 from app.worker import (BatchWorker, EngineStartWorker, ModelApplyWorker,
                         PreviewWorker, QueueItem, TtsJobConfig)
 
@@ -211,10 +214,23 @@ class MainWindow(QWidget):
         self.resize(1360, 860)
 
         # Khay hệ thống — để bắn thông báo Windows khi batch xong
-        self.tray = QSystemTrayIcon(
-            self.style().standardIcon(QStyle.SP_MediaVolume), self)
+        tray_icon = self.windowIcon()
+        if tray_icon.isNull():
+            tray_icon = self.style().standardIcon(QStyle.SP_MediaVolume)
+        self.tray = QSystemTrayIcon(tray_icon, self)
         self.tray.setToolTip("GPT-SoVITS v2Pro Voice Studio")
         self.tray.setVisible(True)
+
+        # Theo dõi VRAM (máy không có nvidia-smi → thread tự thoát, label ẩn)
+        self.vram_monitor = VramMonitor(interval=5.0)
+        self.vram_monitor.sig_vram.connect(self._on_vram)
+        self.vram_monitor.start()
+
+        # Phát hiện engine chết giữa chừng (poll tiến trình mỗi 3 giây)
+        self._crash_timer = QTimer(self)
+        self._crash_timer.setInterval(3000)
+        self._crash_timer.timeout.connect(self._check_engine_alive)
+        self._crash_timer.start()
 
         # Lịch sử kết quả từ các phiên trước (chỉ hiện thư mục còn tồn tại)
         for d in load_history():
@@ -570,6 +586,9 @@ class MainWindow(QWidget):
         self.lbl_eta.setStyleSheet("color:#556; font-weight:600;")
         hb.addWidget(self.lbl_eta)
         hb.addStretch(1)
+        self.lbl_vram = QLabel("")
+        self.lbl_vram.setToolTip("GPU VRAM (nvidia-smi)")
+        hb.addWidget(self.lbl_vram)
         bl.addLayout(hb)
 
         self.tabs = QTabWidget()
@@ -837,6 +856,9 @@ class MainWindow(QWidget):
 
     def closeEvent(self, e):
         self._save_to_settings()
+        if hasattr(self, "vram_monitor"):
+            self.vram_monitor.stop()
+            self.vram_monitor.wait(2000)
         if self.batch_worker and self.batch_worker.isRunning():
             self.batch_worker.cancel()
             self.batch_worker.wait(3000)
@@ -874,13 +896,19 @@ class MainWindow(QWidget):
                                         self.i18n.tr("profile_name_prompt"))
         if not ok or not name.strip():
             return
+        # Copy audio vào kho app → profile sống sót kể cả khi file gốc bị
+        # di chuyển/xóa
+        ref_copy, aux_copies = store_voice_files(
+            name.strip(),
+            self.ed_ref.text().strip(),
+            [self.list_aux.item(i).text() for i in range(self.list_aux.count())],
+        )
         prof = VoiceProfile(
             name=name.strip(),
-            ref_audio_path=self.ed_ref.text().strip(),
+            ref_audio_path=ref_copy,
             prompt_text=self.ed_prompt.toPlainText().strip(),
             prompt_lang=self.cmb_prompt_lang.currentData(),
-            aux_ref_audio_paths=[self.list_aux.item(i).text()
-                                 for i in range(self.list_aux.count())],
+            aux_ref_audio_paths=aux_copies,
         )
         self.profiles.upsert(prof)
         self._refresh_profiles_combo()
@@ -902,6 +930,7 @@ class MainWindow(QWidget):
         name = self.cmb_profiles.currentText()
         if name:
             self.profiles.delete(name)
+            delete_voice_files(name)
             self._refresh_profiles_combo()
 
     # ==================================================================
@@ -1105,8 +1134,10 @@ class MainWindow(QWidget):
             out_wav = Path(payload) / "output.wav"
             if out_wav.is_file():
                 self.player.load(str(out_wav))
-        elif status == "error" and "out of memory" in payload.lower():
-            self.append_log(self.i18n.tr("msg_vram"))
+        elif status == "error":
+            key = classify_error(payload)
+            if key:
+                self.append_log(f"💡 {self.i18n.tr(key)}")
 
     @Slot(int, int)
     def _on_total_progress(self, done: int, total: int):
@@ -1189,7 +1220,8 @@ class MainWindow(QWidget):
             self.append_log(self.i18n.tr("preview_done"))
             self.player.play(payload)
         else:
-            self._warn(payload)
+            key = classify_error(payload)
+            self._warn(self.i18n.tr(key) if key else payload)
         self.preview_worker = None
 
     def _retry_errors(self):
@@ -1399,14 +1431,36 @@ class MainWindow(QWidget):
     def _update_engine_lamp(self):
         tr = self.i18n.tr
         colors = {"stopped": "#999", "starting": "#e6a817",
-                  "ready": "#27ae60", "error": "#e5534b"}
+                  "ready": "#27ae60", "error": "#e5534b",
+                  "crashed": "#e5534b"}
         labels = {"stopped": tr("engine_state_stopped"),
                   "starting": tr("engine_state_starting"),
                   "ready": tr("engine_state_ready"),
-                  "error": tr("engine_state_error")}
+                  "error": tr("engine_state_error"),
+                  "crashed": tr("engine_state_crashed")}
         self.lamp.setStyleSheet(
             f"color:{colors.get(self.engine_state, '#999')}; font-size:14pt;")
         self.lbl_engine_state.setText(labels.get(self.engine_state, ""))
+
+    def _check_engine_alive(self):
+        """Đèn 'Sẵn sàng' nhưng tiến trình engine đã thoát → báo crash ngay
+        thay vì đợi tới lúc gọi TTS thất bại."""
+        if self.engine_state == "ready" and not self.engine.is_running():
+            self._set_engine_state("crashed")
+            self.btn_engine_start.setEnabled(True)
+            self.btn_engine_stop.setEnabled(False)
+            self.append_log(self.i18n.tr("log_engine_crashed"))
+            if hasattr(self, "tray"):
+                self.tray.showMessage("Voice Studio",
+                                      self.i18n.tr("engine_state_crashed"),
+                                      QSystemTrayIcon.Warning, 8000)
+
+    @Slot(int, int)
+    def _on_vram(self, used_mb: int, total_mb: int):
+        pct = used_mb / total_mb if total_mb else 0
+        color = "#c0392b" if pct >= 0.92 else ("#b3541e" if pct >= 0.80 else "#556")
+        self.lbl_vram.setText(f"VRAM {used_mb / 1024:.1f} / {total_mb / 1024:.1f} GB")
+        self.lbl_vram.setStyleSheet(f"color:{color}; font-weight:600;")
 
     # ==================================================================
     # Model
@@ -1443,7 +1497,8 @@ class MainWindow(QWidget):
         if ok:
             self.append_log(f"✓ {tr('model_applied')}")
         else:
-            self._warn(f"{tr('model_apply_failed')}\n{msg}")
+            key = classify_error(msg)
+            self._warn(f"{tr('model_apply_failed')}\n{tr(key) if key else msg}")
         self.model_worker = None
 
     # ==================================================================

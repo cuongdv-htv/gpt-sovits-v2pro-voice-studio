@@ -2,9 +2,61 @@
 """Voice profiles — lưu/nạp hồ sơ giọng (ref audio + prompt) vào profiles.json."""
 
 import json
+import re
+import shutil
+from pathlib import Path
 from typing import Optional
 
 from app.settings import config_dir
+
+_INVALID = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
+
+
+def _voices_dir() -> Path:
+    d = config_dir() / "voices"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def _safe_name(name: str) -> str:
+    return (_INVALID.sub("_", name).strip(" .") or "voice")[:60]
+
+
+def store_voice_files(profile_name: str, ref_audio_path: str,
+                      aux_paths: list) -> tuple:
+    """Copy audio mẫu (+ audio phụ) vào thư mục app để profile không chết
+    khi người dùng di chuyển/xóa file gốc.
+
+    Trả về (ref_mới, [aux_mới]); file nào copy lỗi thì giữ đường dẫn cũ."""
+    dest = _voices_dir() / _safe_name(profile_name)
+    dest.mkdir(parents=True, exist_ok=True)
+
+    def _copy(src_str: str, stem: str) -> str:
+        try:
+            src = Path(src_str)
+            if not src.is_file():
+                return src_str
+            if dest in src.parents:      # đã nằm trong kho app → khỏi copy
+                return src_str
+            target = dest / f"{stem}{src.suffix.lower() or '.wav'}"
+            shutil.copy2(src, target)
+            return str(target)
+        except Exception:
+            return src_str
+
+    new_ref = _copy(ref_audio_path, "ref") if ref_audio_path else ""
+    new_aux = [_copy(p, f"aux{i + 1}") for i, p in enumerate(aux_paths or [])]
+    return new_ref, new_aux
+
+
+def delete_voice_files(profile_name: str):
+    """Xóa thư mục audio đã copy của profile (nếu có)."""
+    try:
+        d = _voices_dir() / _safe_name(profile_name)
+        if d.is_dir():
+            shutil.rmtree(d)
+    except Exception:
+        pass
 
 
 class VoiceProfile:

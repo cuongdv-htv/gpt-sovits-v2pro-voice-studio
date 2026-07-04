@@ -151,6 +151,16 @@ STRINGS = {
     "engine_state_starting": {"vi": "Đang khởi động… (lần đầu có thể tải model, xin chờ)", "ja": "起動中…（初回はモデルDLの場合あり）", "en": "Starting… (first run may download models)"},
     "engine_state_ready": {"vi": "Sẵn sàng", "ja": "準備完了", "en": "Ready"},
     "engine_state_error": {"vi": "Lỗi", "ja": "エラー", "en": "Error"},
+    "engine_state_crashed": {
+        "vi": "Engine dừng đột ngột — bấm 'Khởi động engine' để chạy lại",
+        "ja": "エンジンが異常終了 — 「エンジン起動」で再起動してください",
+        "en": "Engine crashed — click 'Start engine' to restart",
+    },
+    "log_engine_crashed": {
+        "vi": "💥 Engine dừng đột ngột (tiến trình đã thoát). Xem các dòng [engine] phía trên để biết nguyên nhân.",
+        "ja": "💥 エンジンが異常終了しました（プロセス終了）。原因は上の [engine] 行を確認してください。",
+        "en": "💥 Engine crashed (process exited). Check the [engine] lines above for the cause.",
+    },
     "engine_not_ready_msg": {
         "vi": "Engine chưa sẵn sàng. Hãy trỏ đúng thư mục Engine và bấm 'Khởi động engine'.",
         "ja": "エンジンが未起動です。エンジンフォルダを設定し「エンジン起動」を押してください。",
@@ -254,6 +264,11 @@ STRINGS = {
     "msg_queue_empty": {"vi": "Hàng đợi trống. Hãy thêm văn bản hoặc import file .txt.", "ja": "キューが空です。テキスト追加か .txt をインポートしてください。", "en": "The queue is empty. Add text or import .txt files."},
     "msg_batch_done": {"vi": "Hoàn tất: {ok} thành công, {fail} lỗi / {total} mục.", "ja": "完了: 成功 {ok}・失敗 {fail} / 全 {total} 件。", "en": "Finished: {ok} succeeded, {fail} failed / {total} items."},
     "msg_batch_cancelled": {"vi": "Đã hủy batch.", "ja": "バッチを中止しました。", "en": "Batch cancelled."},
+    "err_ref_duration": {
+        "vi": "Audio mẫu phải dài 3–10 giây — engine từ chối file ngoài khoảng này. Dùng nút '✂ Cắt 3–10s…' để cắt lại.",
+        "ja": "参照音声は3～10秒である必要があります（範囲外はエンジンが拒否）。「✂ 3～10秒に切り出し…」で調整してください。",
+        "en": "Reference audio must be 3–10 seconds — the engine rejects clips outside this range. Use '✂ Trim to 3–10s…' to fix it.",
+    },
     "msg_vram": {
         "vi": "Có thể GPU hết VRAM. Thử giảm batch_size, đóng ứng dụng khác, hoặc dùng văn bản ngắn hơn.",
         "ja": "GPU の VRAM 不足の可能性。batch_size を下げる、他アプリを閉じる、短い文を試してください。",

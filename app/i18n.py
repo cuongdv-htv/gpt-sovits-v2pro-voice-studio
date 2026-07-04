@@ -136,8 +136,39 @@ STRINGS = {
     "grp_output": {"vi": "Đầu ra", "ja": "出力"},
     "out_format": {"vi": "Định dạng:", "ja": "フォーマット:"},
     "out_mp3_too": {"vi": "Xuất thêm MP3", "ja": "MP3 も出力"},
+    "out_srt": {"vi": "Xuất phụ đề .srt (đọc từng câu)", "ja": "字幕 .srt を出力（文単位で合成）"},
+    "out_srt_tooltip": {
+        "vi": "Tổng hợp TỪNG CÂU để lấy timestamp chính xác → file .srt khớp giọng đọc.\nChậm hơn chế độ thường một chút; ngữ điệu nối câu có thể khác nhẹ.",
+        "ja": "文ごとに合成して正確なタイムスタンプを取得 → 音声に同期した .srt を生成。\n通常モードよりやや遅く、文間の抑揚が少し変わる場合があります。",
+    },
+    "out_norm": {"vi": "Chuẩn hóa loudness −14 LUFS (YouTube)", "ja": "ラウドネス正規化 −14 LUFS（YouTube）"},
+    "out_norm_tooltip": {
+        "vi": "Chuẩn EBU R128 qua ffmpeg — âm lượng đồng đều giữa các video.",
+        "ja": "ffmpeg の EBU R128 準拠 — 動画間で音量を均一化。",
+    },
+    "out_audiobook": {"vi": "Ghép batch thành 1 file (audiobook)", "ja": "バッチを1ファイルに結合（オーディオブック）"},
+    "out_audiobook_tooltip": {
+        "vi": "Sau khi 'Tạo tất cả' xong: ghép các mục thành công thành merged.wav theo thứ tự hàng đợi (+ merged.srt nếu bật SRT).",
+        "ja": "「全て生成」完了後、成功した項目をキュー順に merged.wav へ結合（SRT有効時は merged.srt も）。",
+    },
+    "audiobook_gap": {"vi": "Khoảng lặng giữa các mục (giây):", "ja": "項目間の無音（秒）:"},
+    "log_audiobook_done": {"vi": "📚 Đã ghép audiobook:", "ja": "📚 オーディオブック結合完了:"},
     "output_base": {"vi": "Thư mục lưu:", "ja": "保存先フォルダ:"},
     "btn_open_output": {"vi": "📂 Mở thư mục", "ja": "📂 フォルダを開く"},
+
+    # ---- Trim dialog ----
+    "btn_trim": {"vi": "✂ Cắt 3–10s…", "ja": "✂ 3～10秒に切り出し…"},
+    "trim_title": {"vi": "Cắt audio mẫu (3–10 giây)", "ja": "参照音声の切り出し（3～10秒）"},
+    "trim_start": {"vi": "Bắt đầu:", "ja": "開始:"},
+    "trim_end": {"vi": "Kết thúc:", "ja": "終了:"},
+    "trim_length": {"vi": "Độ dài chọn:", "ja": "選択長:"},
+    "trim_range_hint": {"vi": "cần 3–10 giây", "ja": "3～10秒が必要"},
+    "trim_play": {"vi": "▶ Nghe đoạn chọn", "ja": "▶ 選択部分を再生"},
+    "trim_save": {"vi": "💾 Lưu bản cắt && dùng", "ja": "💾 切り出して使用"},
+    "trim_load_error": {
+        "vi": "Không đọc được file audio này để cắt:",
+        "ja": "この音声ファイルを読み込めませんでした:",
+    },
 
     # ---- Bottom: progress / log / results ----
     "grp_progress": {"vi": "Tiến độ", "ja": "進行状況"},

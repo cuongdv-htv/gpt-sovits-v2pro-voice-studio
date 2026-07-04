@@ -6,8 +6,10 @@ from dataclasses import dataclass, field
 
 from PySide6.QtCore import QThread, Signal
 
+from app.audio_post import (build_srt, concat_with_silence, normalize_loudness,
+                            offset_srt_entries, split_sentences, wav_duration)
 from app.engine_client import EngineError, GptSovitsClient
-from app.output_writer import write_result
+from app.output_writer import create_output_dir, write_result
 
 
 @dataclass
@@ -46,6 +48,11 @@ class TtsJobConfig:
     model_variant: str = "v2Pro"
     gpt_weights: str = ""
     sovits_weights: str = ""
+    # Hậu xử lý (tùy chọn)
+    export_srt: bool = False          # tổng hợp từng câu + sinh .srt
+    normalize_loudness: bool = False  # chuẩn -14 LUFS (YouTube)
+    audiobook_merge: bool = False     # ghép cả batch thành 1 file
+    audiobook_gap: float = 0.8        # khoảng lặng giữa các mục (giây)
 
 
 class BatchWorker(QThread):
@@ -56,6 +63,7 @@ class BatchWorker(QThread):
     sig_item_progress = Signal(int)             # 0-100 cho mục hiện tại
     sig_total_progress = Signal(int, int)       # done, total
     sig_log = Signal(str)
+    sig_audiobook_done = Signal(str)            # thư mục audiobook đã ghép
     sig_batch_finished = Signal(int, int, bool) # ok, fail, cancelled
 
     def __init__(self, client: GptSovitsClient, items: list, cfg: TtsJobConfig,
@@ -69,9 +77,53 @@ class BatchWorker(QThread):
     def cancel(self):
         self._cancel = True
 
+    def _tts_once(self, text: str, text_lang: str, seed: int,
+                  split_method: str) -> bytes:
+        return self.client.tts(
+            text=text,
+            text_lang=text_lang,
+            ref_audio_path=self.cfg.ref_audio_path,
+            prompt_text=self.cfg.prompt_text,
+            prompt_lang=self.cfg.prompt_lang,
+            aux_ref_audio_paths=self.cfg.aux_ref_audio_paths,
+            speed_factor=self.cfg.speed_factor,
+            text_split_method=split_method,
+            batch_size=self.cfg.batch_size,
+            top_k=self.cfg.top_k,
+            top_p=self.cfg.top_p,
+            temperature=self.cfg.temperature,
+            repetition_penalty=self.cfg.repetition_penalty,
+            fragment_interval=self.cfg.fragment_interval,
+            seed=seed,
+            media_type="wav",
+        )
+
+    def _synthesize_with_srt(self, item: QueueItem, seed: int):
+        """Tổng hợp TỪNG CÂU để lấy timestamp chính xác → (wav_bytes, entries).
+        entries: [(start, end, text), ...] tính cả khoảng lặng fragment_interval."""
+        sentences = split_sentences(item.text)
+        if not sentences:
+            sentences = [item.text.strip()]
+        gap = float(self.cfg.fragment_interval)
+        segments, entries = [], []
+        t = 0.0
+        for k, sent in enumerate(sentences):
+            if self._cancel:
+                raise _CancelledMidItem()
+            wav = self._tts_once(sent, item.text_lang, seed, "cut0")
+            dur = wav_duration(wav)
+            entries.append((t, t + dur, sent))
+            segments.append(wav)
+            t += dur + gap
+            self.sig_item_progress.emit(int(10 + 70 * (k + 1) / len(sentences)))
+        return concat_with_silence(segments, gap), entries
+
     def run(self):
         ok = fail = 0
         total = len(self.items)
+        # (item, srt_entries) của các mục thành công — cho chế độ audiobook
+        merged_parts: list = []
+
         for i, item in enumerate(self.items):
             if self._cancel:
                 break
@@ -91,27 +143,23 @@ class BatchWorker(QThread):
                 actual_seed = random.randint(0, 2**31 - 1)
 
             try:
-                self.sig_item_progress.emit(15)
+                self.sig_item_progress.emit(5)
                 self.sig_log.emit(f"▶ TTS [{item.text_lang}] {item.name} ({item.chars} chars)")
-                wav = self.client.tts(
-                    text=item.text,
-                    text_lang=item.text_lang,
-                    ref_audio_path=self.cfg.ref_audio_path,
-                    prompt_text=self.cfg.prompt_text,
-                    prompt_lang=self.cfg.prompt_lang,
-                    aux_ref_audio_paths=self.cfg.aux_ref_audio_paths,
-                    speed_factor=self.cfg.speed_factor,
-                    text_split_method=self.cfg.text_split_method,
-                    batch_size=self.cfg.batch_size,
-                    top_k=self.cfg.top_k,
-                    top_p=self.cfg.top_p,
-                    temperature=self.cfg.temperature,
-                    repetition_penalty=self.cfg.repetition_penalty,
-                    fragment_interval=self.cfg.fragment_interval,
-                    seed=actual_seed,
-                    media_type="wav",
-                )
+
+                srt_entries = None
+                if self.cfg.export_srt:
+                    wav, srt_entries = self._synthesize_with_srt(item, actual_seed)
+                else:
+                    wav = self._tts_once(item.text, item.text_lang, actual_seed,
+                                         self.cfg.text_split_method)
                 self.sig_item_progress.emit(80)
+
+                if self.cfg.normalize_loudness:
+                    try:
+                        wav = normalize_loudness(wav)  # giữ nguyên thời lượng → SRT vẫn khớp
+                    except Exception as e:
+                        self.sig_log.emit(f"⚠ loudnorm skipped ({item.name}): {e}")
+                self.sig_item_progress.emit(88)
 
                 meta = {
                     "text_lang": item.text_lang,
@@ -131,6 +179,7 @@ class BatchWorker(QThread):
                     "fragment_interval": self.cfg.fragment_interval,
                     "seed_requested": self.cfg.seed,
                     "seed_actual": actual_seed,
+                    "loudness_normalized": self.cfg.normalize_loudness,
                 }
                 out_dir = write_result(
                     output_base=self.cfg.output_base,
@@ -140,13 +189,21 @@ class BatchWorker(QThread):
                     ref_audio_path=self.cfg.ref_audio_path,
                     meta=meta,
                     export_mp3=self.cfg.export_mp3,
+                    srt_text=build_srt(srt_entries) if srt_entries else None,
                 )
                 item.status = "done"
                 item.output_dir = str(out_dir)
                 ok += 1
+                if self.cfg.audiobook_merge:
+                    merged_parts.append((item.name, wav, srt_entries))
                 self.sig_item_progress.emit(100)
                 self.sig_log.emit(f"✓ saved: {out_dir}")
                 self.sig_item_finished.emit(i, "done", str(out_dir))
+            except _CancelledMidItem:
+                item.status = "skipped"
+                self.sig_log.emit(f"⚠ cancelled mid-item: {item.name}")
+                self.sig_item_finished.emit(i, "skipped", "")
+                break
             except EngineError as e:
                 item.status, item.error = "error", str(e)
                 fail += 1
@@ -160,7 +217,55 @@ class BatchWorker(QThread):
 
             self.sig_total_progress.emit(i + 1, total)
 
+        # ---- Audiobook: ghép các mục thành công thành 1 file ----
+        if self.cfg.audiobook_merge and merged_parts and not self._cancel:
+            try:
+                self._write_audiobook(merged_parts)
+            except Exception as e:
+                self.sig_log.emit(f"✗ audiobook merge failed: {e}")
+
         self.sig_batch_finished.emit(ok, fail, self._cancel)
+
+    def _write_audiobook(self, parts):
+        """parts: [(name, wav_bytes, srt_entries|None), ...] theo thứ tự batch."""
+        gap = float(self.cfg.audiobook_gap)
+        merged_wav = concat_with_silence([w for _, w, _ in parts], gap)
+
+        out_dir = create_output_dir(self.cfg.output_base, "audiobook")
+        (out_dir / "merged.wav").write_bytes(merged_wav)
+
+        # SRT gộp (nếu chế độ SRT bật): dịch timestamp theo vị trí từng phần
+        if self.cfg.export_srt and all(e is not None for _, _, e in parts):
+            all_entries, offset = [], 0.0
+            for name, wav, entries in parts:
+                all_entries.extend(offset_srt_entries(entries, offset))
+                offset += wav_duration(wav) + gap
+            (out_dir / "merged.srt").write_text(build_srt(all_entries),
+                                                encoding="utf-8")
+
+        if self.cfg.export_mp3:
+            from app.output_writer import _export_mp3
+            _export_mp3(merged_wav, out_dir / "merged.mp3")
+
+        import json
+        meta = {
+            "type": "audiobook",
+            "parts": [name for name, _, _ in parts],
+            "gap_seconds": gap,
+            "duration_seconds": round(wav_duration(merged_wav), 3),
+            "loudness_normalized": self.cfg.normalize_loudness,
+            "srt_included": self.cfg.export_srt,
+        }
+        (out_dir / "meta.json").write_text(
+            json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
+
+        self.sig_log.emit(f"📚 audiobook: {out_dir} ({len(parts)} parts, "
+                          f"{meta['duration_seconds']}s)")
+        self.sig_audiobook_done.emit(str(out_dir))
+
+
+class _CancelledMidItem(Exception):
+    """Người dùng bấm Hủy giữa lúc đang tổng hợp từng câu."""
 
 
 class EngineStartWorker(QThread):

@@ -183,6 +183,7 @@ Chất lượng audio mẫu quyết định phần lớn độ giống. Chuẩn 
 
 1. **Kéo-thả** file vào ô audio mẫu (hoặc bấm *Chọn…*).
 2. Bấm **▶ Nghe thử** để kiểm tra đúng file, đủ rõ.
+   - File dài quá 10 giây? Bấm **✂ Cắt 3–10s…**: hộp thoại hiện **waveform**, kéo 2 mốc xanh/đỏ (hoặc nhập số giây) để chọn đoạn, bấm *▶ Nghe đoạn chọn* kiểm tra, rồi *💾 Lưu bản cắt & dùng* — app tự tạo file `_cut.wav` cạnh file gốc và dùng ngay. Nút Lưu chỉ mở khi đoạn chọn nằm trong 3–10 giây.
 3. Gõ **prompt_text**: *chính xác từng chữ* những gì được nói trong audio mẫu.
    - Rất nên điền. Để trống = chế độ "không text tham chiếu", chất lượng thường kém hơn rõ rệt.
    - Sai chính tả/thiếu chữ sẽ làm giọng ra bị lệch.
@@ -315,7 +316,15 @@ Lưu ý: profile lưu **đường dẫn** tới file audio, không copy file. Di
 | Mục | Giải thích |
 |---|---|
 | **Xuất thêm MP3** | Ngoài `output.wav` luôn có, tạo thêm `output.mp3` 192 kbps (tiện gửi/upload) |
+| **Xuất phụ đề .srt** | Tổng hợp **từng câu một** để lấy timestamp chính xác → `output.srt` khớp giọng đọc (nhập thẳng vào YouTube/Premiere/CapCut). Chậm hơn chế độ thường một chút; khoảng lặng giữa các câu = `fragment_interval` |
+| **Chuẩn hóa loudness −14 LUFS** | Chuẩn âm lượng YouTube (EBU R128 qua ffmpeg) — các video đều âm lượng như nhau, không cần chỉnh tay |
+| **Ghép batch thành 1 file (audiobook)** | Sau **Tạo tất cả**: tự ghép các mục thành công thành `merged.wav` (+`merged.mp3`, +`merged.srt` nếu bật các option tương ứng) theo đúng thứ tự hàng đợi, trong thư mục `{timestamp}_audiobook` |
+| **Khoảng lặng giữa các mục** | Độ dài im lặng chèn giữa các chương khi ghép audiobook (mặc định 0.8s) |
 | **Thư mục lưu** | Thư mục gốc chứa các thư mục kết quả. Nút **📂 Mở thư mục** mở nhanh bằng Explorer |
+
+> 💡 **Workflow video YouTube:** import các file chương `.txt` → bật cả 4 option (MP3 + SRT + loudness + audiobook) → **Tạo tất cả** → nhận về một `merged.wav` chuẩn −14 LUFS kèm `merged.srt` phụ đề khớp toàn bộ — kéo thẳng vào phần mềm dựng video.
+
+> ⚠️ Chế độ SRT tách câu theo dấu `。．.！？!?…` và xuống dòng. Số thập phân kiểu "3.14" có thể bị tách nhầm — với văn bản nhiều số liệu, hãy viết số thành chữ.
 
 ### Nhóm Engine
 

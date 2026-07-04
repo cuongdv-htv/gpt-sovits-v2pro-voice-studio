@@ -21,6 +21,7 @@ from app.engine_manager import EngineManager
 from app.i18n import CUT_METHODS, I18n, PROMPT_LANGS, TEXT_LANGS
 from app.profiles import ProfileStore, VoiceProfile
 from app.settings import Settings
+from app.trim_dialog import TrimDialog
 from app.worker import (BatchWorker, EngineStartWorker, ModelApplyWorker,
                         QueueItem, TtsJobConfig)
 
@@ -200,10 +201,12 @@ class MainWindow(QWidget):
         self.ed_ref = DropLineEdit()
         self.btn_ref_browse = QPushButton()
         self.btn_ref_play = QPushButton()
+        self.btn_ref_trim = QPushButton()
         h = QHBoxLayout()
         h.addWidget(self.ed_ref, 1)
         h.addWidget(self.btn_ref_browse)
         h.addWidget(self.btn_ref_play)
+        h.addWidget(self.btn_ref_trim)
         vl.addWidget(self.lbl_ref)
         vl.addLayout(h)
 
@@ -431,6 +434,20 @@ class MainWindow(QWidget):
         self.chk_mp3 = QCheckBox()
         self.lbl_format = QLabel()
         of.addRow(self.lbl_format, self.chk_mp3)
+        self.chk_srt = QCheckBox()
+        of.addRow("", self.chk_srt)
+        self.chk_norm = QCheckBox()
+        of.addRow("", self.chk_norm)
+        self.chk_audiobook = QCheckBox()
+        of.addRow("", self.chk_audiobook)
+        self.sp_gap = QDoubleSpinBox()
+        self.sp_gap.setRange(0.0, 5.0)
+        self.sp_gap.setSingleStep(0.1)
+        self.sp_gap.setDecimals(1)
+        self.sp_gap.setSuffix(" s")
+        self.sp_gap.setMaximumWidth(110)
+        self.lbl_gap = QLabel()
+        of.addRow(self.lbl_gap, self.sp_gap)
         self.ed_outbase = QLineEdit()
         self.btn_out_browse = QPushButton()
         self.btn_out_open = QPushButton()
@@ -496,6 +513,8 @@ class MainWindow(QWidget):
         # ---- Connections ----
         self.btn_ref_browse.clicked.connect(self._browse_ref)
         self.btn_ref_play.clicked.connect(lambda: self.player.play(self.ed_ref.text()))
+        self.btn_ref_trim.clicked.connect(self._open_trim_dialog)
+        self.chk_audiobook.toggled.connect(self.sp_gap.setEnabled)
         self.btn_aux_add.clicked.connect(self._add_aux)
         self.btn_aux_del.clicked.connect(self._del_aux)
         self.btn_prof_save.clicked.connect(self._save_profile)
@@ -538,6 +557,8 @@ class MainWindow(QWidget):
         self.ed_ref.setPlaceholderText(tr("ref_audio_placeholder"))
         self.btn_ref_browse.setText(tr("browse"))
         self.btn_ref_play.setText(tr("btn_play_ref"))
+        self.btn_ref_trim.setText(tr("btn_trim"))
+        self.btn_ref_trim.setToolTip(tr("trim_title"))
         self.lbl_prompt.setText(tr("prompt_text"))
         self.ed_prompt.setPlaceholderText(tr("prompt_text_placeholder"))
         self.lbl_prompt_lang.setText(tr("prompt_lang"))
@@ -601,6 +622,13 @@ class MainWindow(QWidget):
         self.grp_output.setTitle(tr("grp_output"))
         self.lbl_format.setText(tr("out_format"))
         self.chk_mp3.setText(tr("out_mp3_too"))
+        self.chk_srt.setText(tr("out_srt"))
+        self.chk_srt.setToolTip(tr("out_srt_tooltip"))
+        self.chk_norm.setText(tr("out_norm"))
+        self.chk_norm.setToolTip(tr("out_norm_tooltip"))
+        self.chk_audiobook.setText(tr("out_audiobook"))
+        self.chk_audiobook.setToolTip(tr("out_audiobook_tooltip"))
+        self.lbl_gap.setText(tr("audiobook_gap"))
         self.lbl_outbase.setText(tr("output_base"))
         self.btn_out_browse.setText(tr("browse"))
         self.btn_out_open.setText(tr("btn_open_output"))
@@ -654,6 +682,11 @@ class MainWindow(QWidget):
         self.sp_seed.setValue(max(seed, 0))
         self.sp_seed.setEnabled(seed >= 0)
         self.chk_mp3.setChecked(bool(s.get("export_mp3")))
+        self.chk_srt.setChecked(bool(s.get("export_srt")))
+        self.chk_norm.setChecked(bool(s.get("normalize_loudness")))
+        self.chk_audiobook.setChecked(bool(s.get("audiobook_merge")))
+        self.sp_gap.setValue(float(s.get("audiobook_gap")))
+        self.sp_gap.setEnabled(self.chk_audiobook.isChecked())
         self.ed_outbase.setText(s.get("output_base"))
         self._refresh_profiles_combo()
 
@@ -691,6 +724,10 @@ class MainWindow(QWidget):
             batch_size=self.sp_batch.value(),
             seed=-1 if self.chk_seed_random.isChecked() else self.sp_seed.value(),
             export_mp3=self.chk_mp3.isChecked(),
+            export_srt=self.chk_srt.isChecked(),
+            normalize_loudness=self.chk_norm.isChecked(),
+            audiobook_merge=self.chk_audiobook.isChecked(),
+            audiobook_gap=self.sp_gap.value(),
             output_base=self.ed_outbase.text().strip(),
             ui_lang=self.i18n.lang,
         )
@@ -890,6 +927,10 @@ class MainWindow(QWidget):
             model_variant=s.get("model_variant"),
             gpt_weights=s.get("gpt_weights"),
             sovits_weights=s.get("sovits_weights"),
+            export_srt=s.get("export_srt"),
+            normalize_loudness=s.get("normalize_loudness"),
+            audiobook_merge=s.get("audiobook_merge"),
+            audiobook_gap=s.get("audiobook_gap"),
         )
 
     def _generate_manual(self):
@@ -924,6 +965,7 @@ class MainWindow(QWidget):
         w.sig_item_progress.connect(self.pb_item.setValue)
         w.sig_total_progress.connect(self._on_total_progress)
         w.sig_log.connect(self.append_log)
+        w.sig_audiobook_done.connect(self._on_audiobook_done)
         w.sig_batch_finished.connect(self._on_batch_finished)
         self.pb_total.setValue(0)
         self.pb_total.setMaximum(len(items))
@@ -976,6 +1018,29 @@ class MainWindow(QWidget):
             self.batch_worker.cancel()
             self.btn_cancel.setEnabled(False)
 
+    @Slot(str)
+    def _on_audiobook_done(self, out_dir: str):
+        self.append_log(f"{self.i18n.tr('log_audiobook_done')} {out_dir}")
+        self._add_result_row(out_dir)
+        merged = Path(out_dir) / "merged.wav"
+        if merged.is_file():
+            self.player.load(str(merged))
+
+    def _open_trim_dialog(self):
+        tr = self.i18n.tr
+        path = self.ed_ref.text().strip()
+        if not path or not Path(path).is_file():
+            self._warn(tr("msg_need_ref"))
+            return
+        try:
+            dlg = TrimDialog(path, self.i18n, self)
+        except Exception as e:
+            self._warn(f"{tr('trim_load_error')}\n{e}")
+            return
+        if dlg.exec() and dlg.saved_path:
+            self.ed_ref.setText(dlg.saved_path)
+            self.append_log(f"✂ {Path(dlg.saved_path).name}")
+
     # ==================================================================
     # Results
     # ==================================================================
@@ -998,9 +1063,11 @@ class MainWindow(QWidget):
     def _play_result_row(self, row: int, _col: int):
         it = self.tbl_results.item(row, 0)
         if it:
-            wav = Path(it.toolTip()) / "output.wav"
-            if wav.is_file():
-                self.player.play(str(wav))
+            for name in ("output.wav", "merged.wav"):
+                wav = Path(it.toolTip()) / name
+                if wav.is_file():
+                    self.player.play(str(wav))
+                    break
 
     @staticmethod
     def _open_dir(path: str):

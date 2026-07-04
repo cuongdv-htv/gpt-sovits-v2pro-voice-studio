@@ -131,7 +131,7 @@ Sơ đồ bố cục:
 └────────────────────────────────────────────────────────────────────┘
 ```
 
-**Nút [VI / 日本語]** góc trên phải: đổi toàn bộ nhãn giao diện giữa tiếng Việt và tiếng Nhật ngay lập tức.
+**Nút chuyển ngôn ngữ** góc trên phải: xoay vòng **Tiếng Việt → 日本語 → English** — đổi toàn bộ nhãn giao diện ngay lập tức (nhãn trên nút là ngôn ngữ *sẽ chuyển sang*).
 
 **Đèn trạng thái engine** (góc dưới trái):
 
@@ -159,6 +159,7 @@ Ghi chú:
 - Nếu máy không có GPU NVIDIA, app ghi cảnh báo vào Log và engine chạy CPU (rất chậm nhưng vẫn ra kết quả).
 - Đóng app sẽ tự dừng engine — không để tiến trình mồ côi.
 - Host/port mặc định `127.0.0.1:9880`. Chỉ đổi port khi bị trùng với phần mềm khác (đổi xong bấm Khởi động lại engine).
+- Tick **"Tự khởi động engine khi mở app"** để lần sau mở app là engine tự chạy — khỏi bấm nút và chờ.
 
 ---
 
@@ -185,6 +186,7 @@ Chất lượng audio mẫu quyết định phần lớn độ giống. Chuẩn 
 2. Bấm **▶ Nghe thử** để kiểm tra đúng file, đủ rõ.
    - File dài quá 10 giây? Bấm **✂ Cắt 3–10s…**: hộp thoại hiện **waveform**, kéo 2 mốc xanh/đỏ (hoặc nhập số giây) để chọn đoạn, bấm *▶ Nghe đoạn chọn* kiểm tra, rồi *💾 Lưu bản cắt & dùng* — app tự tạo file `_cut.wav` cạnh file gốc và dùng ngay. Nút Lưu chỉ mở khi đoạn chọn nằm trong 3–10 giây.
 3. Gõ **prompt_text**: *chính xác từng chữ* những gì được nói trong audio mẫu.
+   - Lười gõ? Bấm **🎤 Nhận dạng lời thoại** — Whisper (chạy ngay trên máy, không cần mạng) nghe audio mẫu rồi tự điền lời thoại + ngôn ngữ. Kiểm tra lại kết quả trước khi dùng.
    - Rất nên điền. Để trống = chế độ "không text tham chiếu", chất lượng thường kém hơn rõ rệt.
    - Sai chính tả/thiếu chữ sẽ làm giọng ra bị lệch.
 4. Chọn **ngôn ngữ của lời thoại mẫu** (ví dụ audio mẫu nói tiếng Nhật → chọn `ja`).
@@ -245,13 +247,21 @@ Có 3 cách, dùng lẫn nhau được:
 ### Chạy batch
 
 1. Kiểm tra giọng mẫu đang chọn (cả batch dùng chung giọng này).
+   - Nên bấm **🎧 Thử 1 câu** trước: app tổng hợp *câu đầu tiên* (của mục đang chọn trong hàng đợi, hoặc ô văn bản) và phát ngay — ưng giọng rồi hãy chạy cả batch dài.
 2. Bấm **🚀 Tạo tất cả**.
 3. Quan sát:
    - **Mục hiện tại**: tiến độ mục đang xử lý.
    - **Tổng**: k/N mục đã xong.
    - Cột **Trạng thái** từng mục: Chờ → Đang tạo… → Xong ✓ / Lỗi ✗ (di chuột lên "Lỗi ✗" để xem nguyên nhân).
-4. **Một mục lỗi không dừng batch** — app ghi lỗi rồi làm tiếp mục sau. Cuối batch, Log tổng kết: `Hoàn tất: X thành công, Y lỗi / N mục.`
+4. **Một mục lỗi không dừng batch** — app ghi lỗi rồi làm tiếp mục sau. Cuối batch, Log tổng kết: `Hoàn tất: X thành công, Y lỗi / N mục.` Có mục lỗi? Bấm **🔁 Chạy lại mục lỗi** — chỉ các mục lỗi chạy lại, mục đã xong giữ nguyên.
 5. **⛔ Hủy**: dừng an toàn — mục đang chạy sẽ chạy nốt, các mục sau không chạy.
+
+Tiện ích khi chạy batch:
+- **Kéo-thả** file `.txt` (hoặc cả thư mục) thẳng vào bảng hàng đợi — khỏi qua nút Import.
+- **⬆ / ⬇** đổi thứ tự mục; **✏ Sửa văn bản** chỉnh nội dung một mục ngay trong app.
+- **Còn lại ≈ …** cạnh thanh tiến độ: ước tính thời gian còn lại theo tốc độ trung bình các mục đã xong.
+- Batch xong app bắn **thông báo Windows** — cứ chạy batch dài rồi đi làm việc khác.
+- Tab **Kết quả** giờ **lưu lịch sử qua các phiên** (các thư mục còn tồn tại trên đĩa sẽ hiện lại khi mở app).
 
 Mỗi mục trong queue ra **một thư mục kết quả riêng** (xem mục 11).
 

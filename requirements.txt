@@ -6,3 +6,5 @@ numpy>=1.24
 # Optional: MP3 export
 pydub>=0.25
 imageio-ffmpeg>=0.4.9
+# Optional: auto-transcribe reference audio (Whisper on CPU)
+faster-whisper>=1.0

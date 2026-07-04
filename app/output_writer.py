@@ -64,7 +64,8 @@ def _export_mp3(wav_bytes: bytes, mp3_path: Path) -> bool:
 
 def write_result(*, output_base: str, source_name: str, wav_bytes: bytes,
                  text: str, ref_audio_path: str, meta: dict,
-                 export_mp3: bool = False) -> Path:
+                 export_mp3: bool = False,
+                 srt_text: Optional[str] = None) -> Path:
     """Ghi trọn bộ kết quả cho một đầu vào. Trả về đường dẫn thư mục đã tạo."""
     out_dir = create_output_dir(output_base, source_name)
 
@@ -75,6 +76,10 @@ def write_result(*, output_base: str, source_name: str, wav_bytes: bytes,
     mp3_ok = False
     if export_mp3:
         mp3_ok = _export_mp3(wav_bytes, out_dir / "output.mp3")
+
+    # 2b. Phụ đề SRT tùy chọn
+    if srt_text:
+        (out_dir / "output.srt").write_text(srt_text, encoding="utf-8")
 
     # 3. Văn bản nguồn
     (out_dir / "input.txt").write_text(text, encoding="utf-8")
@@ -98,6 +103,7 @@ def write_result(*, output_base: str, source_name: str, wav_bytes: bytes,
         "ref_audio_original_path": ref_audio_path,
         "ref_audio_copied": str(ref_copy) if ref_copy else None,
         "mp3_exported": mp3_ok,
+        "srt_exported": bool(srt_text),
         **meta,
     }
     with open(out_dir / "meta.json", "w", encoding="utf-8") as f:

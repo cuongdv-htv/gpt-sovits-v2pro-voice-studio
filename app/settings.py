@@ -46,6 +46,10 @@ DEFAULTS = {
     # Output
     "output_base": str(Path.home() / "Documents" / "VoiceStudioOutput"),
     "export_mp3": False,
+    "export_srt": False,          # tổng hợp từng câu + xuất .srt
+    "normalize_loudness": False,  # chuẩn hóa -14 LUFS (YouTube)
+    "audiobook_merge": False,     # ghép batch thành 1 file
+    "audiobook_gap": 0.8,         # khoảng lặng giữa các mục (giây)
 }
 
 

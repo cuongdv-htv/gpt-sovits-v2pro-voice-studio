@@ -5,4 +5,4 @@ Kiến trúc: GUI (env nhẹ) ↔ HTTP ↔ api_v2.py chính thức của GPT-SoV
 (env riêng của engine, GUI tự khởi động subprocess).
 """
 
-__version__ = "1.0.0"
+__version__ = "1.1.0"

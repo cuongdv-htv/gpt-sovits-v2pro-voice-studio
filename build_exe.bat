@@ -22,6 +22,8 @@ if not exist ".venv\Scripts\python.exe" (
     --hidden-import soundfile ^
     --hidden-import imageio_ffmpeg ^
     --collect-data imageio_ffmpeg ^
+    --collect-all faster_whisper ^
+    --collect-all ctranslate2 ^
     app\main.py
 
 if errorlevel 1 (

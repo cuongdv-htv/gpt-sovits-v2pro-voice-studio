@@ -279,7 +279,7 @@ Lưu bộ "audio mẫu + prompt_text + ngôn ngữ prompt + audio phụ" dưới
 
 Ví dụ workflow: tạo hồ sơ "Sếp A - trầm", "MC nữ - sáng", "Giọng tôi"… → mỗi lần làm việc chỉ cần *Nạp* đúng hồ sơ rồi tạo.
 
-Lưu ý: profile lưu **đường dẫn** tới file audio, không copy file. Di chuyển/xóa file gốc thì profile mất tác dụng → nên gom audio mẫu vào một thư mục cố định (ví dụ `samples\`).
+Từ v1.3: khi lưu profile, app **tự copy audio mẫu (+ audio phụ) vào kho riêng** tại `%APPDATA%\GPT-SoVITS-VoiceStudio\voices\<tên profile>\` — di chuyển hay xóa file gốc cũng không làm profile chết. Xóa profile sẽ xóa luôn bản copy.
 
 ---
 
@@ -401,7 +401,9 @@ Tab **Kết quả** trong app liệt kê các thư mục của phiên làm việ
 | Ngôn ngữ đọc sai (lẫn ngôn ngữ) | Dùng `auto` với văn bản 1 ngôn ngữ | Chọn đúng mã ngôn ngữ thay vì `auto` |
 | File .txt import bị lỗi ký tự | File không phải UTF-8 | Mở Notepad → Save As → Encoding: UTF-8 |
 | Không có output.mp3 | Thiếu pydub/imageio-ffmpeg (hiếm) | Chạy lại `run.bat` để cài đủ requirements |
-| Muốn xem lỗi chi tiết | — | Tab **Log** ghi mọi thứ, kể cả log nội bộ của engine (dòng `[engine]`) |
+| Đèn đỏ "Engine dừng đột ngột" | Engine crash giữa chừng (thường do hết VRAM/RAM) | App tự phát hiện trong ≤3 giây và bắn thông báo — xem dòng `[engine]` cuối trong Log, rồi bấm **Khởi động engine** chạy lại |
+| Muốn biết trước sắp hết VRAM | — | Nhìn `VRAM x.x / y.y GB` góc dưới phải (cập nhật 5s/lần): chữ cam ≥80%, đỏ ≥92% → giảm `batch_size`, đóng app dùng GPU |
+| Muốn xem lỗi chi tiết | — | Tab **Log** ghi mọi thứ, kể cả log nội bộ của engine (dòng `[engine]`); lỗi quen thuộc có thêm dòng 💡 giải thích song ngữ |
 
 **Đọc Log thế nào:** dòng bắt đầu `[engine]` là log của GPT-SoVITS; dòng `✗` là lỗi từng mục; dòng `✓ saved:` kèm đường dẫn kết quả.
 

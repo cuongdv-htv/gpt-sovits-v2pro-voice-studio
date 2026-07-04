@@ -30,6 +30,14 @@ if errorlevel 1 (
     exit /b 1
 )
 
+echo Tinh gon: xoa cac module Qt khong dung (WebEngine, QML, Designer...) ~465 MB
+powershell -NoProfile -Command ^
+  "$base = 'dist\VoiceStudio\_internal\PySide6';" ^
+  "$pats = 'Qt6WebEngine*','QtWebEngine*','Qt6Quick*','QtQuick*','Qt6Qml*','QtQml*','Qt6Designer*','QtDesigner*','Qt6Pdf*','QtPdf*','Qt63D*','Qt3D*','Qt6Charts*','QtCharts*','Qt6DataVis*','QtDataVis*','Qt6Location*','QtLocation*','Qt6WebChannel*','QtWebChannel*','Qt6WebSockets*','QtWebSockets*','Qt6VirtualKeyboard*','Qt6Test*','QtTest*','Qt6Sensors*','QtSensors*','Qt6Nfc*','QtNfc*','Qt6Bluetooth*','QtBluetooth*','Qt6SerialPort*','QtSerialPort*','Qt6RemoteObjects*','QtRemoteObjects*','Qt6Scxml*','QtScxml*','Qt6StateMachine*','QtStateMachine*','Qt6Help*','QtHelp*','QtUiTools*','Qt6UiTools*','lupdate*','lrelease*','qmlformat*','assistant*','designer*','linguist*','QtWebEngineProcess*';" ^
+  "foreach ($p in $pats) { Get-ChildItem $base -Filter $p -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force };" ^
+  "foreach ($d in @(\"$base\resources\", \"$base\translations\", \"$base\qml\")) { if (Test-Path $d) { Remove-Item $d -Recurse -Force } };" ^
+  "'Kich thuoc sau tinh gon: {0:N0} MB' -f ((Get-ChildItem dist\VoiceStudio -Recurse -File | Measure-Object Length -Sum).Sum/1MB)"
+
 echo.
 echo BUILD XONG: dist\VoiceStudio\VoiceStudio.exe
 pause

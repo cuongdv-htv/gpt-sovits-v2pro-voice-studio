@@ -2,8 +2,13 @@
 """Fixture dùng chung. Không test nào được chạm vào %APPDATA% thật."""
 
 import io
+import os
 import sys
 from pathlib import Path
+
+# Qt phải chạy không màn hình — đặt TRƯỚC mọi import PySide6 để `python -m
+# pytest` trần cũng chạy được, không cần biến môi trường ngoài.
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import numpy as np
 import pytest

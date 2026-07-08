@@ -20,11 +20,11 @@ import sys
 import time
 from pathlib import Path
 
-from app.audio_post import build_chapters, build_srt, concat_with_silence, \
-    normalize_loudness, offset_srt_entries, wav_duration
+from app.audio_post import build_srt, normalize_loudness
+from app.audiobook import write_audiobook
 from app.engine_client import EngineError, GptSovitsClient
 from app.engine_manager import EngineManager
-from app.output_writer import _export_mp3, create_output_dir, write_result
+from app.output_writer import write_result
 from app.profiles import ProfileStore
 from app.pronunciation import PronunciationStore, matching_rules
 from app.settings import Settings
@@ -218,26 +218,16 @@ def main(argv=None) -> int:
                 fail += 1
 
         if cfg.audiobook_merge and merged_parts:
-            gap = float(cfg.audiobook_gap)
-            merged = concat_with_silence([w for _, w, _ in merged_parts], gap)
-            out_dir = create_output_dir(cfg.output_base, "audiobook")
-            (out_dir / "merged.wav").write_bytes(merged)
-
-            srt_ok = cfg.export_srt and all(e for _, _, e in merged_parts)
-            chapters, all_entries, off = [], [], 0.0
-            for n, w, e in merged_parts:
-                chapters.append((n, off))
-                if srt_ok:
-                    all_entries.extend(offset_srt_entries(e, off))
-                off += wav_duration(w) + gap
-            (out_dir / "chapters.txt").write_text(build_chapters(chapters),
-                                                  encoding="utf-8")
-            if srt_ok:
-                (out_dir / "merged.srt").write_text(build_srt(all_entries),
-                                                    encoding="utf-8")
-            if cfg.export_mp3:
-                _export_mp3(merged, out_dir / "merged.mp3")
-            print(f"Audiobook -> {out_dir}")
+            out_dir, meta = write_audiobook(
+                output_base=cfg.output_base,
+                parts=merged_parts,
+                gap=cfg.audiobook_gap,
+                export_srt=cfg.export_srt,
+                export_mp3=cfg.export_mp3,
+                loudness_normalized=cfg.normalize_loudness,
+            )
+            print(f"Audiobook -> {out_dir} "
+                  f"({len(merged_parts)} parts, {meta['duration_seconds']}s)")
     finally:
         if we_started and not args.keep_engine:
             mgr.stop()

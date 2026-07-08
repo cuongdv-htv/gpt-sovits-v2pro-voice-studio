@@ -11,6 +11,35 @@ from app.settings import config_dir
 
 _INVALID = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
 
+# Tham số tổng hợp lưu kèm profile: giọng kể chuyện (chậm, temperature thấp)
+# và giọng documentary (nhanh, dứt khoát) cần bộ số khác nhau.
+#
+# KHÔNG lưu `seed` (mỗi lần chạy nên khác) và `batch_size` (thuộc về phần cứng
+# máy đang chạy, không thuộc về giọng).
+PROFILE_PARAM_KEYS = {
+    "speed_factor": float,
+    "text_split_method": str,
+    "top_k": int,
+    "top_p": float,
+    "temperature": float,
+    "repetition_penalty": float,
+    "fragment_interval": float,
+}
+
+
+def sanitize_params(raw) -> dict:
+    """Chỉ giữ khóa hợp lệ, ép đúng kiểu. Giá trị rác → bỏ khóa đó."""
+    if not isinstance(raw, dict):
+        return {}
+    out = {}
+    for key, cast in PROFILE_PARAM_KEYS.items():
+        if key in raw:
+            try:
+                out[key] = cast(raw[key])
+            except (TypeError, ValueError):
+                pass
+    return out
+
 
 def _voices_dir() -> Path:
     d = config_dir() / "voices"
@@ -61,21 +90,27 @@ def delete_voice_files(profile_name: str):
 
 class VoiceProfile:
     def __init__(self, name: str, ref_audio_path: str, prompt_text: str,
-                 prompt_lang: str, aux_ref_audio_paths: Optional[list] = None):
+                 prompt_lang: str, aux_ref_audio_paths: Optional[list] = None,
+                 params: Optional[dict] = None):
         self.name = name
         self.ref_audio_path = ref_audio_path
         self.prompt_text = prompt_text
         self.prompt_lang = prompt_lang
         self.aux_ref_audio_paths = aux_ref_audio_paths or []
+        # {} = profile cũ, không có tham số → giữ nguyên cài đặt hiện tại
+        self.params = sanitize_params(params)
 
     def to_dict(self) -> dict:
-        return {
+        d = {
             "name": self.name,
             "ref_audio_path": self.ref_audio_path,
             "prompt_text": self.prompt_text,
             "prompt_lang": self.prompt_lang,
             "aux_ref_audio_paths": self.aux_ref_audio_paths,
         }
+        if self.params:            # profile không có tham số thì khỏi ghi khóa
+            d["params"] = self.params
+        return d
 
     @staticmethod
     def from_dict(d: dict) -> "VoiceProfile":
@@ -85,6 +120,7 @@ class VoiceProfile:
             prompt_text=d.get("prompt_text", ""),
             prompt_lang=d.get("prompt_lang", "ja"),
             aux_ref_audio_paths=d.get("aux_ref_audio_paths", []),
+            params=d.get("params"),
         )
 
 

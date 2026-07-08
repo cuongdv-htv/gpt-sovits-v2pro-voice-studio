@@ -102,12 +102,15 @@ def main(argv=None) -> int:
         if not store.profiles:
             print("(no profiles)")
         for prof in store.profiles:
-            print(f"{prof.name}\t{prof.prompt_lang}\t{prof.ref_audio_path}")
+            params = (" ".join(f"{k}={v}" for k, v in prof.params.items())
+                      if prof.params else "-")
+            print(f"{prof.name}\t{prof.prompt_lang}\t{prof.ref_audio_path}\t{params}")
         return 0
 
     # ---- voice ----
     ref, prompt_text = args.ref, args.prompt_text
     prompt_lang, aux = args.prompt_lang, list(args.aux)
+    profile_params: dict = {}
     if args.profile:
         prof = ProfileStore().get(args.profile)
         if not prof:
@@ -117,6 +120,9 @@ def main(argv=None) -> int:
         prompt_text = prof.prompt_text
         prompt_lang = prof.prompt_lang
         aux = prof.aux_ref_audio_paths
+        profile_params = prof.params
+        if profile_params:
+            print(f"Profile params: {profile_params}")
     if not ref or not Path(ref).is_file():
         print("ERROR: reference audio missing (--ref or --profile)",
               file=sys.stderr)
@@ -128,20 +134,25 @@ def main(argv=None) -> int:
               file=sys.stderr)
         return 1
 
+    def param(key):
+        """Ưu tiên: tham số của profile → settings của GUI."""
+        return profile_params.get(key, settings.get(key))
+
     cfg = TtsJobConfig(
         ref_audio_path=ref,
         prompt_text=prompt_text,
         prompt_lang=prompt_lang,
         aux_ref_audio_paths=aux,
+        # cờ dòng lệnh thắng tất cả
         speed_factor=args.speed if args.speed is not None
-        else settings.get("speed_factor"),
-        text_split_method=args.cut or settings.get("text_split_method"),
-        batch_size=settings.get("batch_size"),
-        top_k=settings.get("top_k"),
-        top_p=settings.get("top_p"),
-        temperature=settings.get("temperature"),
-        repetition_penalty=settings.get("repetition_penalty"),
-        fragment_interval=settings.get("fragment_interval"),
+        else param("speed_factor"),
+        text_split_method=args.cut or param("text_split_method"),
+        batch_size=settings.get("batch_size"),   # thuộc phần cứng, không theo giọng
+        top_k=param("top_k"),
+        top_p=param("top_p"),
+        temperature=param("temperature"),
+        repetition_penalty=param("repetition_penalty"),
+        fragment_interval=param("fragment_interval"),
         seed=args.seed if args.seed is not None else settings.get("seed"),
         output_base=args.out or settings.get("output_base"),
         export_mp3=args.mp3,

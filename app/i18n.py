@@ -312,6 +312,12 @@ STRINGS = {
         "ja": "⚠ この音声の長さを読み取れません",
         "en": "⚠ Cannot read the duration of this file",
     },
+    "profile_params_applied": {
+        "vi": "Đã áp tham số tổng hợp của hồ sơ (speed, top_k, temperature…)",
+        "ja": "プロファイルの合成パラメータを適用（speed・top_k・temperature…）",
+        "en": "Applied the profile's synthesis parameters (speed, top_k, temperature…)",
+    },
+
     # ---- Từ điển phát âm ----
     "btn_pron": {"vi": "📖 Từ điển phát âm…", "ja": "📖 発音辞書…", "en": "📖 Pronunciation dictionary…"},
     "pron_title": {"vi": "Từ điển phát âm", "ja": "発音辞書", "en": "Pronunciation dictionary"},

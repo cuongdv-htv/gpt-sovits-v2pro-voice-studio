@@ -67,7 +67,7 @@ run.bat
 6. Kết quả: mỗi đầu vào một thư mục `{YYYYMMDD_HHMMSS}_{tên}` trong Output base, gồm `output.wav` (+`output.mp3`, `output.srt` nếu bật), `input.txt`, `ref_used.*`, `meta.json`. Bật audiobook thì có thêm thư mục `{timestamp}_audiobook` chứa `merged.wav`, `merged.srt` và `chapters.txt`.
 
 Mẹo / ヒント:
-- **Voice profile:** lưu bộ (ref audio + prompt) để tái dùng nhanh.
+- **Voice profile:** lưu bộ (ref audio + prompt + **tham số tổng hợp**: speed, top_k, temperature, cut method…) để tái dùng nhanh. Giọng kể chuyện (chậm, temperature thấp) và giọng documentary (nhanh, dứt khoát) là hai profile riêng, nạp là xong. Profile lưu từ bản cũ không có tham số → nạp xong giữ nguyên cài đặt hiện tại.
 - **Aux refs (few-shot):** thêm vài audio phụ cùng người nói để tăng độ giống.
 - **Cross-language:** cùng một giọng mẫu tiếng Nhật vẫn đọc được tiếng Anh/Trung/Hàn.
 - **Seed cố định** trong "Nâng cao" để tái lập kết quả; seed thực tế luôn ghi trong `meta.json`.

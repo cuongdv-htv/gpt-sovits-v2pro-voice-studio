@@ -47,17 +47,38 @@ def _wav_duration_seconds(wav_bytes: bytes) -> Optional[float]:
         return None
 
 
+def _mp3_from_segment(seg, mp3_path: Path) -> bool:
+    seg.export(str(mp3_path), format="mp3", bitrate="192k")
+    return True
+
+
+def _prepare_pydub():
+    import imageio_ffmpeg
+    from pydub import AudioSegment
+    ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
+    AudioSegment.converter = ffmpeg_exe
+    AudioSegment.ffmpeg = ffmpeg_exe
+    return AudioSegment
+
+
 def _export_mp3(wav_bytes: bytes, mp3_path: Path) -> bool:
     """Xuất MP3 bằng pydub + ffmpeg của imageio-ffmpeg. Trả False nếu không xuất được."""
     try:
-        import imageio_ffmpeg
-        from pydub import AudioSegment
-        ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
-        AudioSegment.converter = ffmpeg_exe
-        AudioSegment.ffmpeg = ffmpeg_exe
-        seg = AudioSegment.from_file(io.BytesIO(wav_bytes), format="wav")
-        seg.export(str(mp3_path), format="mp3", bitrate="192k")
-        return True
+        AudioSegment = _prepare_pydub()
+        return _mp3_from_segment(
+            AudioSegment.from_file(io.BytesIO(wav_bytes), format="wav"),
+            mp3_path)
+    except Exception:
+        return False
+
+
+def export_mp3_file(wav_path, mp3_path: Path) -> bool:
+    """Như `_export_mp3` nhưng đọc thẳng từ file — không nạp cả audiobook
+    vào RAM chỉ để chuyển sang MP3."""
+    try:
+        AudioSegment = _prepare_pydub()
+        return _mp3_from_segment(
+            AudioSegment.from_file(str(wav_path), format="wav"), mp3_path)
     except Exception:
         return False
 

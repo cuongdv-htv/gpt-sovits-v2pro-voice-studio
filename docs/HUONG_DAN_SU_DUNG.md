@@ -336,7 +336,7 @@ Từ v1.3: khi lưu profile, app **tự copy audio mẫu (+ audio phụ) vào kh
 
 > 💡 **Workflow video YouTube:** import các file chương `.txt` → bật cả 4 option (MP3 + SRT + loudness + audiobook) → **Tạo tất cả** → nhận về một `merged.wav` chuẩn −14 LUFS kèm `merged.srt` phụ đề khớp toàn bộ và `chapters.txt` mốc chương — kéo thẳng vào phần mềm dựng video.
 
-> ⚠️ Chế độ SRT tách câu theo dấu `。．.！？!?…` và xuống dòng. Số thập phân kiểu "3.14" có thể bị tách nhầm — với văn bản nhiều số liệu, hãy viết số thành chữ.
+> ℹ️ Chế độ SRT tách câu theo dấu `。．.！？!?…` và xuống dòng. Dấu chấm **không** kết câu khi đứng ngay trước chữ số, nên `3.14`, `1.200億円` và `v1.2.3` được giữ nguyên một câu.
 
 > 📖 **Từ điển phát âm.** Nút **📖 Từ điển phát âm…** dưới ô nhập văn bản. Engine hay đọc sai/bỏ qua từ viết tắt và số liệu — thêm quy tắc `TSMC → ティーエスエムシー`, `5G → ファイブジー`, hoặc regex `(\d+),(\d+)億円 → \1\2オクエン`. Chỉ chuỗi **gửi cho engine** bị thay thế; `output.srt`, `input.txt` và kịch bản hội thoại vẫn giữ nguyên chữ bạn viết. Ô **Thử** cho xem trước engine sẽ nhận được gì.
 >

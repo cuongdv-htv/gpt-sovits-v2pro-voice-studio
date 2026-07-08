@@ -3,18 +3,21 @@
 
 Dùng chung cho GUI (BatchWorker) và CLI — trước đây hai nơi có bản sao riêng
 và đã lệch nhau (CLI không ghi meta.json).
+
+Nhận ĐƯỜNG DẪN wav của từng mục (mỗi mục đã được ghi ra đĩa trước đó), không
+nhận bytes: audiobook dài hàng giờ không được phép nằm hết trong RAM.
 """
 
 import json
 from pathlib import Path
 from typing import List, Optional, Tuple
 
-from app.audio_post import (build_chapters, build_srt, concat_with_silence,
-                            offset_srt_entries, wav_duration)
-from app.output_writer import _export_mp3, create_output_dir
+from app.audio_post import (build_chapters, build_srt, concat_files_to_wav,
+                            offset_srt_entries, wav_duration_file)
+from app.output_writer import create_output_dir, export_mp3_file
 
-# Một phần của audiobook: (tên mục, wav bytes, srt entries | None)
-AudiobookPart = Tuple[str, bytes, Optional[list]]
+# Một phần của audiobook: (tên mục, đường dẫn wav, srt entries | None)
+AudiobookPart = Tuple[str, str, Optional[list]]
 
 
 def write_audiobook(*, output_base: str, parts: List[AudiobookPart],
@@ -32,19 +35,19 @@ def write_audiobook(*, output_base: str, parts: List[AudiobookPart],
         raise ValueError("empty parts")
     gap = float(gap)
 
-    merged_wav = concat_with_silence([w for _, w, _ in parts], gap)
     out_dir = create_output_dir(output_base, "audiobook")
-    (out_dir / "merged.wav").write_bytes(merged_wav)
+    merged_path = out_dir / "merged.wav"
+    total = concat_files_to_wav([p for _, p, _ in parts], gap, merged_path)
 
     srt_ok = bool(export_srt) and all(e is not None for _, _, e in parts)
     chapters: list = []
     all_entries: list = []
     offset = 0.0
-    for name, wav, entries in parts:
+    for name, wav_path, entries in parts:
         chapters.append((name, offset))
         if srt_ok:
             all_entries.extend(offset_srt_entries(entries, offset))
-        offset += wav_duration(wav) + gap
+        offset += wav_duration_file(wav_path) + gap
 
     (out_dir / "chapters.txt").write_text(build_chapters(chapters),
                                           encoding="utf-8")
@@ -52,7 +55,7 @@ def write_audiobook(*, output_base: str, parts: List[AudiobookPart],
         (out_dir / "merged.srt").write_text(build_srt(all_entries),
                                             encoding="utf-8")
     if export_mp3:
-        _export_mp3(merged_wav, out_dir / "merged.mp3")
+        export_mp3_file(merged_path, out_dir / "merged.mp3")
 
     meta = {
         "type": "audiobook",
@@ -60,7 +63,7 @@ def write_audiobook(*, output_base: str, parts: List[AudiobookPart],
         "chapters": [{"name": n, "start_seconds": round(s, 3)}
                      for n, s in chapters],
         "gap_seconds": gap,
-        "duration_seconds": round(wav_duration(merged_wav), 3),
+        "duration_seconds": round(total, 3),
         "loudness_normalized": loudness_normalized,
         "srt_included": srt_ok,
     }

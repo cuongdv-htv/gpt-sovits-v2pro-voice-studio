@@ -20,8 +20,8 @@ import sys
 import time
 from pathlib import Path
 
-from app.audio_post import build_srt, concat_with_silence, normalize_loudness, \
-    offset_srt_entries, wav_duration
+from app.audio_post import build_chapters, build_srt, concat_with_silence, \
+    normalize_loudness, offset_srt_entries, wav_duration
 from app.engine_client import EngineError, GptSovitsClient
 from app.engine_manager import EngineManager
 from app.output_writer import _export_mp3, create_output_dir, write_result
@@ -183,8 +183,9 @@ def main(argv=None) -> int:
             print(f"[{i}/{len(items)}] {name} ({len(text)} chars)…",
                   flush=True)
             try:
-                wav, entries = synthesize_one(client, cfg, text, args.lang,
-                                              seed)
+                wav, entries, failed = synthesize_one(
+                    client, cfg, text, args.lang, seed,
+                    log_cb=lambda s: print(f"  {s}", flush=True))
                 if cfg.normalize_loudness:
                     try:
                         wav = normalize_loudness(wav)
@@ -194,10 +195,12 @@ def main(argv=None) -> int:
                     output_base=cfg.output_base, source_name=name,
                     wav_bytes=wav, text=text, ref_audio_path=ref,
                     meta={"text_lang": args.lang, "prompt_lang": prompt_lang,
-                          "seed_actual": seed, "cli": True},
+                          "seed_actual": seed, "cli": True,
+                          "failed_sentences": failed},
                     export_mp3=cfg.export_mp3,
                     srt_text=build_srt(entries) if entries else None)
-                print(f"  OK {time.time() - t0:.1f}s -> {out_dir}")
+                print(f"  OK {time.time() - t0:.1f}s -> {out_dir}"
+                      + (f"  ({len(failed)} sentence(s) skipped)" if failed else ""))
                 ok += 1
                 if cfg.audiobook_merge:
                     merged_parts.append((name, wav, entries))
@@ -210,11 +213,17 @@ def main(argv=None) -> int:
             merged = concat_with_silence([w for _, w, _ in merged_parts], gap)
             out_dir = create_output_dir(cfg.output_base, "audiobook")
             (out_dir / "merged.wav").write_bytes(merged)
-            if cfg.export_srt and all(e for _, _, e in merged_parts):
-                all_entries, off = [], 0.0
-                for _, w, e in merged_parts:
+
+            srt_ok = cfg.export_srt and all(e for _, _, e in merged_parts)
+            chapters, all_entries, off = [], [], 0.0
+            for n, w, e in merged_parts:
+                chapters.append((n, off))
+                if srt_ok:
                     all_entries.extend(offset_srt_entries(e, off))
-                    off += wav_duration(w) + gap
+                off += wav_duration(w) + gap
+            (out_dir / "chapters.txt").write_text(build_chapters(chapters),
+                                                  encoding="utf-8")
+            if srt_ok:
                 (out_dir / "merged.srt").write_text(build_srt(all_entries),
                                                     encoding="utf-8")
             if cfg.export_mp3:

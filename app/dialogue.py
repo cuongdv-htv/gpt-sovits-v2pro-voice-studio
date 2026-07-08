@@ -90,7 +90,7 @@ class DialogueWorker(QThread):
             seed = random.randint(0, 2**31 - 1)
         gap = float(cfg.fragment_interval)
 
-        parts, all_entries = [], []
+        parts, all_entries, failed = [], [], []
         offset = 0.0
         try:
             for i, (tag, text) in enumerate(self.lines):
@@ -106,9 +106,11 @@ class DialogueWorker(QThread):
                 )
                 self.sig_log.emit(f"🎭 [{tag}] {text[:50]}…"
                                   if len(text) > 50 else f"🎭 [{tag}] {text}")
-                wav, entries = synthesize_one(
+                wav, entries, line_failed = synthesize_one(
                     self.client, cfg_line, text, self.text_lang, seed,
-                    cancel_cb=lambda: self._cancel)
+                    cancel_cb=lambda: self._cancel,
+                    log_cb=self.sig_log.emit)
+                failed.extend(f"[{tag}] {s}" for s in line_failed)
                 parts.append(wav)
                 if cfg.export_srt and entries:
                     all_entries.extend(
@@ -144,6 +146,7 @@ class DialogueWorker(QThread):
                 "duration_seconds": round(wav_duration(merged), 3),
                 "loudness_normalized": cfg.normalize_loudness,
                 "srt_included": bool(cfg.export_srt and all_entries),
+                "failed_sentences": failed,
             }
             (out_dir / "meta.json").write_text(
                 json.dumps(meta, ensure_ascii=False, indent=2),

@@ -959,11 +959,38 @@ class MainWindow(QWidget):
             prompt_text=self.ed_prompt.toPlainText().strip(),
             prompt_lang=self.cmb_prompt_lang.currentData(),
             aux_ref_audio_paths=aux_copies,
+            params=self._current_params(),
         )
         self.profiles.upsert(prof)
         self._refresh_profiles_combo()
         self.cmb_profiles.setCurrentText(prof.name)
         self.append_log(f"✓ {self.i18n.tr('profile_saved')} [{prof.name}]")
+
+    def _current_params(self) -> dict:
+        """Tham số tổng hợp hiện hành — lưu kèm profile."""
+        return {
+            "speed_factor": self.sl_speed.value() / 100.0,
+            "text_split_method": self.cmb_cut.currentData(),
+            "top_k": self.sp_topk.value(),
+            "top_p": self.sp_topp.value(),
+            "temperature": self.sp_temp.value(),
+            "repetition_penalty": self.sp_rep.value(),
+            "fragment_interval": self.sp_frag.value(),
+        }
+
+    def _apply_params(self, params: dict):
+        """Áp tham số của profile lên các widget. Khóa thiếu → giữ nguyên."""
+        if "speed_factor" in params:
+            self.sl_speed.setValue(int(float(params["speed_factor"]) * 100))
+            self.lbl_speed_val.setText(f"{float(params['speed_factor']):.2f}×")
+        if "text_split_method" in params:
+            self._set_combo_data(self.cmb_cut, params["text_split_method"])
+        for key, widget in (("top_k", self.sp_topk), ("top_p", self.sp_topp),
+                            ("temperature", self.sp_temp),
+                            ("repetition_penalty", self.sp_rep),
+                            ("fragment_interval", self.sp_frag)):
+            if key in params:
+                widget.setValue(params[key])
 
     def _load_profile(self):
         prof = self.profiles.get(self.cmb_profiles.currentText())
@@ -975,6 +1002,11 @@ class MainWindow(QWidget):
         self.list_aux.clear()
         for p in prof.aux_ref_audio_paths:
             self.list_aux.addItem(p)
+        # Profile cũ (chưa có params) → không đụng tới cài đặt hiện tại
+        if prof.params:
+            self._apply_params(prof.params)
+            self.append_log(f"⚙ {self.i18n.tr('profile_params_applied')} "
+                            f"[{prof.name}]")
 
     def _delete_profile(self):
         name = self.cmb_profiles.currentText()

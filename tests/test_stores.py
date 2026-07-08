@@ -5,7 +5,8 @@ Nguyên tắc chung: file hỏng KHÔNG được làm sập app.
 """
 
 from app.history import MAX_ENTRIES, append_history, load_history
-from app.profiles import ProfileStore, VoiceProfile, store_voice_files
+from app.profiles import (ProfileStore, VoiceProfile, sanitize_params,
+                          store_voice_files)
 from app.settings import DEFAULTS, Settings
 
 
@@ -97,6 +98,63 @@ def test_store_voice_files_copy_vao_kho_app(tmp_path):
 def test_store_voice_files_giu_duong_dan_khi_file_khong_ton_tai():
     new_ref, _ = store_voice_files("x", "D:/khong/ton/tai.wav", [])
     assert new_ref == "D:/khong/ton/tai.wav"
+
+
+# ------------------------------------------------- profile params (#5)
+def test_profile_luu_va_nap_tham_so():
+    params = {"speed_factor": 0.9, "temperature": 0.7, "top_k": 20,
+              "text_split_method": "cut3"}
+    ProfileStore().upsert(VoiceProfile("kể chuyện", "r.wav", "", "ja",
+                                       params=params))
+    loaded = ProfileStore().get("kể chuyện")
+    assert loaded.params == {**params}
+
+
+def test_profile_cu_khong_co_params_thi_rong():
+    """File profiles.json bản cũ vẫn nạp được — params = {} nghĩa là
+    'giữ nguyên cài đặt hiện tại', không phải 'ép về mặc định'."""
+    store = ProfileStore()
+    store.path.parent.mkdir(parents=True, exist_ok=True)
+    store.path.write_text('[{"name": "cu", "ref_audio_path": "r.wav"}]',
+                          encoding="utf-8")
+    assert ProfileStore().get("cu").params == {}
+
+
+def test_profile_khong_ghi_khoa_params_khi_rong():
+    store = ProfileStore()
+    store.upsert(VoiceProfile("x", "r.wav", "", "ja"))
+    assert "params" not in store.path.read_text(encoding="utf-8")
+
+
+def test_sanitize_params_bo_khoa_la():
+    out = sanitize_params({"speed_factor": 1.2, "seed": 42, "batch_size": 8,
+                           "khoa_la": "x"})
+    assert out == {"speed_factor": 1.2}
+
+
+def test_sanitize_params_ep_kieu():
+    out = sanitize_params({"top_k": "20", "temperature": "0.7"})
+    assert out == {"top_k": 20, "temperature": 0.7}
+
+
+def test_sanitize_params_gia_tri_rac_thi_bo_khoa_do():
+    out = sanitize_params({"top_k": "không phải số", "top_p": 0.8})
+    assert out == {"top_p": 0.8}
+
+
+def test_sanitize_params_khong_phai_dict():
+    assert sanitize_params(None) == {}
+    assert sanitize_params("rác") == {}
+
+
+def test_profile_params_hong_van_nap_duoc_profile():
+    store = ProfileStore()
+    store.path.parent.mkdir(parents=True, exist_ok=True)
+    store.path.write_text(
+        '[{"name": "x", "ref_audio_path": "r.wav", "params": "hỏng"}]',
+        encoding="utf-8")
+    prof = ProfileStore().get("x")
+    assert prof is not None and prof.params == {}
 
 
 # ------------------------------------------------------------- history

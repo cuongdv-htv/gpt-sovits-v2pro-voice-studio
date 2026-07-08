@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
     QHeaderView, QAbstractItemView, QFormLayout, QSizePolicy,
 )
 
+from app.audio_post import REF_MAX_SEC, REF_MIN_SEC, audio_duration
 from app.engine_client import GptSovitsClient
 from app.engine_manager import EngineManager
 from app.errors import classify_error
@@ -203,6 +204,8 @@ class MainWindow(QWidget):
 
         self.preview_worker: PreviewWorker | None = None
         self.transcribe_worker: TranscribeWorker | None = None
+        # (path, mtime, size) → độ dài; tránh giải mã lại mỗi lần đổi text
+        self._ref_dur_cache: dict = {}
         self._eta_chars_done = 0
         self._eta_secs_done = 0.0
         self._item_t0 = 0.0
@@ -287,8 +290,11 @@ class MainWindow(QWidget):
         h.addWidget(self.btn_ref_browse)
         h.addWidget(self.btn_ref_play)
         h.addWidget(self.btn_ref_trim)
+        # Độ dài audio mẫu — kiểm tra tại chỗ, không đợi engine trả 400
+        self.lbl_ref_dur = QLabel()
         vl.addWidget(self.lbl_ref)
         vl.addLayout(h)
+        vl.addWidget(self.lbl_ref_dur)
 
         self.lbl_prompt = QLabel()
         self.ed_prompt = QTextEdit()
@@ -616,6 +622,7 @@ class MainWindow(QWidget):
 
         # ---- Connections ----
         self.btn_ref_browse.clicked.connect(self._browse_ref)
+        self.ed_ref.textChanged.connect(self._refresh_ref_duration)
         self.btn_ref_play.clicked.connect(lambda: self.player.play(self.ed_ref.text()))
         self.btn_ref_trim.clicked.connect(self._open_trim_dialog)
         self.btn_transcribe.clicked.connect(self._transcribe_ref)
@@ -671,6 +678,7 @@ class MainWindow(QWidget):
         self.btn_ref_play.setText(tr("btn_play_ref"))
         self.btn_ref_trim.setText(tr("btn_trim"))
         self.btn_ref_trim.setToolTip(tr("trim_title"))
+        self._refresh_ref_duration()
         self.lbl_prompt.setText(tr("prompt_text"))
         self.ed_prompt.setPlaceholderText(tr("prompt_text_placeholder"))
         self.lbl_prompt_lang.setText(tr("prompt_lang"))
@@ -882,6 +890,35 @@ class MainWindow(QWidget):
         if p:
             self.ed_ref.setText(p)
 
+    def _ref_duration(self, path: str):
+        """Độ dài audio mẫu (giây), có cache theo (đường dẫn, mtime, kích thước)."""
+        try:
+            st = os.stat(path)
+        except OSError:
+            return None
+        key = (path, st.st_mtime_ns, st.st_size)
+        if key not in self._ref_dur_cache:
+            self._ref_dur_cache[key] = audio_duration(path)
+        return self._ref_dur_cache[key]
+
+    def _refresh_ref_duration(self):
+        """Hiện độ dài audio mẫu ngay khi chọn file — engine chỉ nhận 3–10 giây."""
+        tr = self.i18n.tr
+        path = self.ed_ref.text().strip()
+        if not path or not Path(path).is_file():
+            self.lbl_ref_dur.clear()
+            return
+        d = self._ref_duration(path)
+        if d is None:
+            self.lbl_ref_dur.setText(tr("ref_dur_unknown"))
+            self.lbl_ref_dur.setStyleSheet("color:#b7791f;")
+            return
+        ok = REF_MIN_SEC <= d <= REF_MAX_SEC
+        self.lbl_ref_dur.setText(
+            tr("ref_dur_ok" if ok else "ref_dur_bad").replace("{d}", f"{d:.2f}"))
+        self.lbl_ref_dur.setStyleSheet(
+            "color:#1e8449;" if ok else "color:#c0392b; font-weight:600;")
+
     def _add_aux(self):
         paths, _ = QFileDialog.getOpenFileNames(self, self.i18n.tr("aux_refs"),
                                                 "", AUDIO_FILTER)
@@ -1038,6 +1075,12 @@ class MainWindow(QWidget):
             return False
         if not Path(ref).is_file():
             self._warn(f"{tr('msg_ref_not_found')}\n{ref}")
+            return False
+        # Chặn sớm: engine trả 400 nếu ref ngoài 3–10s, nhưng chỉ sau khi đã
+        # nạp model xong. Độ dài không đọc được → cứ để engine phán xử.
+        d = self._ref_duration(ref)
+        if d is not None and not (REF_MIN_SEC <= d <= REF_MAX_SEC):
+            self._warn(f"{tr('err_ref_duration')}\n\n{Path(ref).name} — {d:.2f}s")
             return False
         return True
 

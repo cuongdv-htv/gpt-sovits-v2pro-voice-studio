@@ -2,14 +2,22 @@
 """Thread nền: chạy batch TTS + khởi động engine. UI KHÔNG bao giờ bị đơ."""
 
 import random
+import time
 from dataclasses import dataclass, field
 
 from PySide6.QtCore import QThread, Signal
 
-from app.audio_post import (build_srt, concat_with_silence, normalize_loudness,
-                            offset_srt_entries, split_sentences, wav_duration)
+from app.audio_post import (build_chapters, build_srt, concat_with_silence,
+                            normalize_loudness, offset_srt_entries,
+                            split_sentences, wav_duration)
 from app.engine_client import EngineError, GptSovitsClient
 from app.output_writer import create_output_dir, write_result
+
+# Số lần thử lại MỖI CÂU trước khi bỏ qua câu đó (chế độ SRT).
+# Engine đôi khi lỗi nhất thời (OOM tạm, hụt hơi khi giải mã) — retry cứu được
+# phần lớn, và một câu hỏng không được phép làm mất cả chương.
+SENTENCE_RETRIES = 2
+RETRY_DELAY_SEC = 1.0
 
 
 @dataclass
@@ -82,36 +90,76 @@ def tts_once(client: GptSovitsClient, cfg: TtsJobConfig, text: str,
     )
 
 
+def _tts_with_retry(client: GptSovitsClient, cfg: TtsJobConfig, text: str,
+                    text_lang: str, seed: int, split_method: str,
+                    retries: int, cancel_cb, log_cb) -> bytes:
+    """tts_once + thử lại `retries` lần. Ném lỗi cuối cùng nếu vẫn hỏng."""
+    last_error = None
+    for attempt in range(retries + 1):
+        if cancel_cb():
+            raise SynthCancelled()
+        try:
+            return tts_once(client, cfg, text, text_lang, seed, split_method)
+        except Exception as e:
+            last_error = e
+            if attempt < retries:
+                log_cb(f"⟳ retry {attempt + 1}/{retries}: {e}")
+                time.sleep(RETRY_DELAY_SEC)
+    raise last_error
+
+
 def synthesize_one(client: GptSovitsClient, cfg: TtsJobConfig, text: str,
                    text_lang: str, seed: int,
-                   progress_cb=None, cancel_cb=None):
+                   progress_cb=None, cancel_cb=None, log_cb=None,
+                   retries: int = SENTENCE_RETRIES):
     """Lõi tổng hợp một văn bản — dùng chung cho GUI batch, hội thoại và CLI.
 
-    cfg.export_srt=True → tổng hợp TỪNG CÂU lấy timestamp chính xác.
-    Trả về (wav_bytes, srt_entries | None);
+    cfg.export_srt=True → tổng hợp TỪNG CÂU lấy timestamp chính xác. Câu nào
+    hỏng sau khi retry thì BỎ QUA (không làm hỏng cả văn bản) và được liệt kê
+    trong giá trị trả về.
+
+    Trả về (wav_bytes, srt_entries | None, failed_sentences);
     entries: [(start, end, text), ...] tính cả khoảng lặng fragment_interval."""
     progress_cb = progress_cb or (lambda p: None)
     cancel_cb = cancel_cb or (lambda: False)
+    log_cb = log_cb or (lambda s: None)
 
     if not cfg.export_srt:
-        wav = tts_once(client, cfg, text, text_lang, seed,
-                       cfg.text_split_method)
-        return wav, None
+        wav = _tts_with_retry(client, cfg, text, text_lang, seed,
+                              cfg.text_split_method, retries, cancel_cb, log_cb)
+        return wav, None, []
 
     sentences = split_sentences(text) or [text.strip()]
     gap = float(cfg.fragment_interval)
-    segments, entries = [], []
+    segments, entries, failed = [], [], []
+    last_error = None
     t = 0.0
     for k, sent in enumerate(sentences):
         if cancel_cb():
             raise SynthCancelled()
-        wav = tts_once(client, cfg, sent, text_lang, seed, "cut0")
+        try:
+            wav = _tts_with_retry(client, cfg, sent, text_lang, seed, "cut0",
+                                  retries, cancel_cb, log_cb)
+        except SynthCancelled:
+            raise
+        except Exception as e:
+            last_error = e
+            failed.append(sent)
+            log_cb(f"✗ bỏ qua câu {k + 1}/{len(sentences)}: {e}")
+            progress_cb(int(10 + 70 * (k + 1) / len(sentences)))
+            continue
         dur = wav_duration(wav)
         entries.append((t, t + dur, sent))
         segments.append(wav)
         t += dur + gap
         progress_cb(int(10 + 70 * (k + 1) / len(sentences)))
-    return concat_with_silence(segments, gap), entries
+
+    if not segments:
+        # Không cứu được câu nào → coi như cả văn bản hỏng
+        raise last_error or EngineError("no sentence could be synthesized")
+    if failed:
+        log_cb(f"⚠ {len(failed)}/{len(sentences)} câu bị bỏ qua")
+    return concat_with_silence(segments, gap), entries, failed
 
 
 class BatchWorker(QThread):
@@ -170,11 +218,12 @@ class BatchWorker(QThread):
                 self.sig_item_progress.emit(5)
                 self.sig_log.emit(f"▶ TTS [{item.text_lang}] {item.name} ({item.chars} chars)")
 
-                wav, srt_entries = synthesize_one(
+                wav, srt_entries, failed = synthesize_one(
                     self.client, self.cfg, item.text, item.text_lang,
                     actual_seed,
                     progress_cb=self.sig_item_progress.emit,
-                    cancel_cb=lambda: self._cancel)
+                    cancel_cb=lambda: self._cancel,
+                    log_cb=self.sig_log.emit)
                 self.sig_item_progress.emit(80)
 
                 if self.cfg.normalize_loudness:
@@ -203,6 +252,7 @@ class BatchWorker(QThread):
                     "seed_requested": self.cfg.seed,
                     "seed_actual": actual_seed,
                     "loudness_normalized": self.cfg.normalize_loudness,
+                    "failed_sentences": failed,
                 }
                 out_dir = write_result(
                     output_base=self.cfg.output_base,
@@ -258,12 +308,19 @@ class BatchWorker(QThread):
         out_dir = create_output_dir(self.cfg.output_base, "audiobook")
         (out_dir / "merged.wav").write_bytes(merged_wav)
 
-        # SRT gộp (nếu chế độ SRT bật): dịch timestamp theo vị trí từng phần
-        if self.cfg.export_srt and all(e is not None for _, _, e in parts):
-            all_entries, offset = [], 0.0
-            for name, wav, entries in parts:
+        # Mốc bắt đầu của từng phần trong file đã ghép
+        chapters, all_entries, offset = [], [], 0.0
+        srt_ok = self.cfg.export_srt and all(e is not None for _, _, e in parts)
+        for name, wav, entries in parts:
+            chapters.append((name, offset))
+            if srt_ok:
                 all_entries.extend(offset_srt_entries(entries, offset))
-                offset += wav_duration(wav) + gap
+            offset += wav_duration(wav) + gap
+
+        # chapters.txt — dán thẳng vào mô tả YouTube
+        (out_dir / "chapters.txt").write_text(build_chapters(chapters),
+                                              encoding="utf-8")
+        if srt_ok:
             (out_dir / "merged.srt").write_text(build_srt(all_entries),
                                                 encoding="utf-8")
 
@@ -275,10 +332,12 @@ class BatchWorker(QThread):
         meta = {
             "type": "audiobook",
             "parts": [name for name, _, _ in parts],
+            "chapters": [{"name": n, "start_seconds": round(s, 3)}
+                         for n, s in chapters],
             "gap_seconds": gap,
             "duration_seconds": round(wav_duration(merged_wav), 3),
             "loudness_normalized": self.cfg.normalize_loudness,
-            "srt_included": self.cfg.export_srt,
+            "srt_included": srt_ok,
         }
         (out_dir / "meta.json").write_text(
             json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")

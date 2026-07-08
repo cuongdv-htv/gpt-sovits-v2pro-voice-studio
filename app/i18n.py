@@ -301,6 +301,17 @@ STRINGS = {
         "ja": "参照音声は3～10秒である必要があります（範囲外はエンジンが拒否）。「✂ 3～10秒に切り出し…」で調整してください。",
         "en": "Reference audio must be 3–10 seconds — the engine rejects clips outside this range. Use '✂ Trim to 3–10s…' to fix it.",
     },
+    "ref_dur_ok": {"vi": "✓ {d} giây — hợp lệ", "ja": "✓ {d} 秒 — OK", "en": "✓ {d} s — OK"},
+    "ref_dur_bad": {
+        "vi": "✗ {d} giây — ngoài 3–10s, engine sẽ từ chối. Bấm '✂ Cắt 3–10s…'",
+        "ja": "✗ {d} 秒 — 3～10秒の範囲外。エンジンが拒否します。「✂ 3～10秒に切り出し…」",
+        "en": "✗ {d} s — outside 3–10 s, the engine will reject it. Click '✂ Trim to 3–10s…'",
+    },
+    "ref_dur_unknown": {
+        "vi": "⚠ Không đọc được độ dài file này",
+        "ja": "⚠ この音声の長さを読み取れません",
+        "en": "⚠ Cannot read the duration of this file",
+    },
     "msg_vram": {
         "vi": "Có thể GPU hết VRAM. Thử giảm batch_size, đóng ứng dụng khác, hoặc dùng văn bản ngắn hơn.",
         "ja": "GPU の VRAM 不足の可能性。batch_size を下げる、他アプリを閉じる、短い文を試してください。",

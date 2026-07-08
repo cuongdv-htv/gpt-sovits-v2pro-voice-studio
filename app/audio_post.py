@@ -17,6 +17,9 @@ import soundfile as sf
 
 CREATE_NO_WINDOW = 0x08000000 if os.name == "nt" else 0
 
+# Giới hạn độ dài audio mẫu của engine GPT-SoVITS (ngoài khoảng → POST /tts 400)
+REF_MIN_SEC, REF_MAX_SEC = 3.0, 10.0
+
 
 # ---------------------------------------------------------------- đọc/ghi
 def load_audio_any(path: str) -> Tuple[np.ndarray, int]:
@@ -50,6 +53,23 @@ def array_to_wav_bytes(data: np.ndarray, sr: int) -> bytes:
 def wav_duration(wav_bytes: bytes) -> float:
     info = sf.info(io.BytesIO(wav_bytes))
     return info.frames / float(info.samplerate)
+
+
+def audio_duration(path: str) -> Optional[float]:
+    """Độ dài file audio (giây). None nếu không đọc được.
+
+    Ưu tiên đọc header qua soundfile (rất nhanh, không giải mã); mp3/m4a
+    không đọc được header thì mới giải mã qua ffmpeg."""
+    try:
+        info = sf.info(path)
+        return info.frames / float(info.samplerate)
+    except Exception:
+        pass
+    try:
+        data, sr = load_audio_any(path)
+        return len(data) / float(sr)
+    except Exception:
+        return None
 
 
 # ---------------------------------------------------------------- ghép
@@ -160,3 +180,21 @@ def build_srt(entries: List[Tuple[float, float, str]]) -> str:
 def offset_srt_entries(entries: List[Tuple[float, float, str]],
                        offset: float) -> List[Tuple[float, float, str]]:
     return [(s + offset, e + offset, t) for s, e, t in entries]
+
+
+# ---------------------------------------------------------------- chapters
+def sec_to_chapter_time(t: float) -> str:
+    """Mốc thời gian kiểu YouTube: M:SS, hoặc H:MM:SS khi ≥ 1 giờ."""
+    s = max(0, int(t))
+    h, s = divmod(s, 3600)
+    m, s = divmod(s, 60)
+    return f"{h}:{m:02d}:{s:02d}" if h else f"{m}:{s:02d}"
+
+
+def build_chapters(chapters: List[Tuple[str, float]]) -> str:
+    """chapters: [(tên, start_sec), ...] → nội dung dán vào mô tả YouTube.
+    YouTube bắt buộc mốc đầu tiên là 0:00 nên mốc đầu luôn được ép về 0."""
+    lines = []
+    for i, (name, start) in enumerate(chapters):
+        lines.append(f"{sec_to_chapter_time(0 if i == 0 else start)} {name}")
+    return "\n".join(lines) + "\n"

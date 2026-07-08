@@ -12,9 +12,9 @@ from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
 from PySide6.QtWidgets import (QDialog, QDoubleSpinBox, QHBoxLayout, QLabel,
                                QMessageBox, QPushButton, QVBoxLayout, QWidget)
 
+from app.audio_post import REF_MAX_SEC as MAX_SEC
+from app.audio_post import REF_MIN_SEC as MIN_SEC
 from app.audio_post import load_audio_any
-
-MIN_SEC, MAX_SEC = 3.0, 10.0
 
 
 class WaveformWidget(QWidget):

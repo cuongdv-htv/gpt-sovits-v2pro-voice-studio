@@ -8,7 +8,7 @@
 
 ![GPT-SoVITS v2Pro Voice Studio](assets/screenshot.png)
 
-**Tính năng chính / 主な機能:** voice clone 3–10s (zero/few-shot) · đọc 5 ngôn ngữ + cross-language · batch từ `.txt` (kéo-thả, sắp xếp, sửa mục, chạy lại mục lỗi, ETA, thông báo Windows) · **cắt audio mẫu trên waveform** · **🎤 tự nhận dạng lời thoại mẫu (Whisper local)** · **xuất phụ đề `.srt` khớp từng câu** · **chuẩn hóa loudness −14 LUFS (YouTube)** · **ghép batch thành audiobook** (`merged.wav` + `merged.srt`) · thử 1 câu trước khi chạy batch · tự khởi động engine · lịch sử kết quả · WAV/MP3 · voice profiles · **🎭 hội thoại đa giọng** (kịch bản [Vai] → mỗi vai một giọng) · **CLI mode** (batch không cần GUI) · UI 3 ngôn ngữ VI/JA/EN
+**Tính năng chính / 主な機能:** voice clone 3–10s (zero/few-shot) · đọc 5 ngôn ngữ + cross-language · batch từ `.txt` (kéo-thả, sắp xếp, sửa mục, chạy lại mục lỗi, ETA, thông báo Windows) · **cắt audio mẫu trên waveform** · **kiểm tra độ dài audio mẫu ngay khi chọn file** · **🎤 tự nhận dạng lời thoại mẫu (Whisper local)** · **xuất phụ đề `.srt` khớp từng câu** · **tự retry từng câu — một câu lỗi không làm mất cả chương** · **chuẩn hóa loudness −14 LUFS (YouTube)** · **ghép batch thành audiobook** (`merged.wav` + `merged.srt` + `chapters.txt` cho mô tả YouTube) · thử 1 câu trước khi chạy batch · tự khởi động engine · lịch sử kết quả · WAV/MP3 · voice profiles · **🎭 hội thoại đa giọng** (kịch bản [Vai] → mỗi vai một giọng) · **CLI mode** (batch không cần GUI) · UI 3 ngôn ngữ VI/JA/EN
 
 ---
 
@@ -64,7 +64,7 @@ run.bat
 3. **Giọng mẫu:** chọn file audio ~3–10s (giọng sạch, ít tạp âm) + gõ **đúng lời thoại** trong audio đó (prompt_text) + chọn ngôn ngữ của lời thoại.
 4. Gõ văn bản cần đọc, chọn **ngôn ngữ đọc** (ja/en/zh/ko/yue/auto) → bấm **🎙 Tạo**.
 5. Hoặc **Import .txt / thư mục** → hàng đợi → **🚀 Tạo tất cả** (batch).
-6. Kết quả: mỗi đầu vào một thư mục `{YYYYMMDD_HHMMSS}_{tên}` trong Output base, gồm `output.wav` (+`output.mp3` nếu bật), `input.txt`, `ref_used.*`, `meta.json`.
+6. Kết quả: mỗi đầu vào một thư mục `{YYYYMMDD_HHMMSS}_{tên}` trong Output base, gồm `output.wav` (+`output.mp3`, `output.srt` nếu bật), `input.txt`, `ref_used.*`, `meta.json`. Bật audiobook thì có thêm thư mục `{timestamp}_audiobook` chứa `merged.wav`, `merged.srt` và `chapters.txt`.
 
 Mẹo / ヒント:
 - **Voice profile:** lưu bộ (ref audio + prompt) để tái dùng nhanh.

@@ -81,7 +81,7 @@ Mẹo / ヒント:
 .venv\Scripts\python.exe -m pytest
 ```
 
-137 test cho phần logic thuần (tách câu, SRT, chapters, ghép audiobook, từ điển phát âm, retry/bỏ câu hỏng, các store JSON, i18n). Không cần engine, không cần GPU, chạy dưới 1 giây. Mọi test đều trỏ `%APPDATA%` vào thư mục tạm nên **không đụng vào cấu hình thật** của bạn.
+180 test: phần logic thuần (tách câu, SRT, chapters, ghép audiobook, từ điển phát âm, retry/bỏ câu hỏng, các store JSON, i18n) **và tầng GUI** (chạy offscreen, không cần màn hình). Không cần engine, không cần GPU, chạy dưới 2 giây. Mọi test đều trỏ `%APPDATA%` vào thư mục tạm nên **không đụng vào cấu hình thật** của bạn.
 
 CI tự chạy bộ test này trên `windows-latest` + `ubuntu-latest` cho mọi pull request.
 

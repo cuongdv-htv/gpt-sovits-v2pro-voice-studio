@@ -312,6 +312,38 @@ STRINGS = {
         "ja": "⚠ この音声の長さを読み取れません",
         "en": "⚠ Cannot read the duration of this file",
     },
+    # ---- Từ điển phát âm ----
+    "btn_pron": {"vi": "📖 Từ điển phát âm…", "ja": "📖 発音辞書…", "en": "📖 Pronunciation dictionary…"},
+    "pron_title": {"vi": "Từ điển phát âm", "ja": "発音辞書", "en": "Pronunciation dictionary"},
+    "pron_hint": {
+        "vi": "Ép cách đọc cho từ viết tắt / số liệu (TSMC, EUV, 5G…). Chỉ chuỗi GỬI cho engine bị thay thế — văn bản gốc, phụ đề .srt và input.txt giữ nguyên. Quy tắc áp TUẦN TỰ từ trên xuống: đặt quy tắc cụ thể TRƯỚC quy tắc tổng quát (EUV trước EU).",
+        "ja": "略語・数値（TSMC・EUV・5G…）の読みを強制。エンジンへ送る文字列のみ置換され、元のテキスト・.srt 字幕・input.txt はそのまま。ルールは上から順に適用 — 具体的なものを先に（EU より EUV を先に）。",
+        "en": "Force the reading of abbreviations and figures (TSMC, EUV, 5G…). Only the string SENT to the engine is rewritten — the original text, .srt subtitles and input.txt stay untouched. Rules apply top-down in order: put specific rules BEFORE general ones (EUV before EU).",
+    },
+    "pron_col_find": {"vi": "Tìm", "ja": "検索", "en": "Find"},
+    "pron_col_replace": {"vi": "Đọc thành", "ja": "読み", "en": "Read as"},
+    "pron_col_regex": {"vi": "Regex", "ja": "正規表現", "en": "Regex"},
+    "pron_col_enabled": {"vi": "Bật", "ja": "有効", "en": "On"},
+    "pron_add": {"vi": "+ Thêm quy tắc", "ja": "+ ルール追加", "en": "+ Add rule"},
+    "pron_del": {"vi": "− Xóa", "ja": "− 削除", "en": "− Remove"},
+    "pron_order_tip": {
+        "vi": "Đổi thứ tự áp dụng — quy tắc trên chạy trước",
+        "ja": "適用順を変更 — 上のルールが先に実行されます",
+        "en": "Change apply order — upper rules run first",
+    },
+    "pron_test": {"vi": "Thử — gõ văn bản để xem engine sẽ nhận được gì:", "ja": "テスト — エンジンが受け取る文字列を確認:", "en": "Test — type text to see what the engine will receive:"},
+    "pron_test_placeholder": {
+        "vi": "Ví dụ: TSMCの5Gチップは…",
+        "ja": "例: TSMCの5Gチップは…",
+        "en": "e.g. TSMC's 5G chip is…",
+    },
+    "pron_hits": {"vi": "Quy tắc đã khớp:", "ja": "適用されたルール:", "en": "Rules matched:"},
+    "pron_no_hit": {"vi": "Không quy tắc nào khớp.", "ja": "一致するルールなし。", "en": "No rule matched."},
+    "pron_invalid_regex": {"vi": "Regex không hợp lệ:", "ja": "無効な正規表現:", "en": "Invalid regex:"},
+    "pron_save": {"vi": "Lưu từ điển", "ja": "辞書を保存", "en": "Save dictionary"},
+    "pron_saved": {"vi": "Đã lưu từ điển phát âm:", "ja": "発音辞書を保存:", "en": "Pronunciation dictionary saved:"},
+    "pron_rules_count": {"vi": "quy tắc đang bật", "ja": "件有効", "en": "rules enabled"},
+
     "msg_vram": {
         "vi": "Có thể GPU hết VRAM. Thử giảm batch_size, đóng ứng dụng khác, hoặc dùng văn bản ngắn hơn.",
         "ja": "GPU の VRAM 不足の可能性。batch_size を下げる、他アプリを閉じる、短い文を試してください。",

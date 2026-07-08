@@ -26,6 +26,7 @@ from app.engine_client import EngineError, GptSovitsClient
 from app.engine_manager import EngineManager
 from app.output_writer import _export_mp3, create_output_dir, write_result
 from app.profiles import ProfileStore
+from app.pronunciation import PronunciationStore, matching_rules
 from app.settings import Settings
 from app.worker import TtsJobConfig, synthesize_one
 
@@ -72,6 +73,8 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--seed", type=int, default=None)
     p.add_argument("--cut", default=None,
                    choices=["cut0", "cut1", "cut2", "cut3", "cut4", "cut5"])
+    p.add_argument("--no-dict", action="store_true",
+                   help="ignore the pronunciation dictionary")
     return p
 
 
@@ -147,7 +150,11 @@ def main(argv=None) -> int:
         audiobook_merge=args.audiobook,
         audiobook_gap=args.gap if args.gap is not None
         else settings.get("audiobook_gap"),
+        pronunciation_rules=[] if args.no_dict
+        else PronunciationStore().enabled_rules(),
     )
+    if cfg.pronunciation_rules:
+        print(f"Pronunciation dictionary: {len(cfg.pronunciation_rules)} rule(s)")
 
     # ---- engine ----
     host = args.host or settings.get("host")
@@ -196,7 +203,9 @@ def main(argv=None) -> int:
                     wav_bytes=wav, text=text, ref_audio_path=ref,
                     meta={"text_lang": args.lang, "prompt_lang": prompt_lang,
                           "seed_actual": seed, "cli": True,
-                          "failed_sentences": failed},
+                          "failed_sentences": failed,
+                          "pronunciation_applied": matching_rules(
+                              text, cfg.pronunciation_rules)},
                     export_mp3=cfg.export_mp3,
                     srt_text=build_srt(entries) if entries else None)
                 print(f"  OK {time.time() - t0:.1f}s -> {out_dir}"

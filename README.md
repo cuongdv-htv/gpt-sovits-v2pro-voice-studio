@@ -8,7 +8,7 @@
 
 ![GPT-SoVITS v2Pro Voice Studio](assets/screenshot.png)
 
-**Tính năng chính / 主な機能:** voice clone 3–10s (zero/few-shot) · đọc 5 ngôn ngữ + cross-language · batch từ `.txt` (kéo-thả, sắp xếp, sửa mục, chạy lại mục lỗi, ETA, thông báo Windows) · **cắt audio mẫu trên waveform** · **kiểm tra độ dài audio mẫu ngay khi chọn file** · **🎤 tự nhận dạng lời thoại mẫu (Whisper local)** · **xuất phụ đề `.srt` khớp từng câu** · **tự retry từng câu — một câu lỗi không làm mất cả chương** · **chuẩn hóa loudness −14 LUFS (YouTube)** · **ghép batch thành audiobook** (`merged.wav` + `merged.srt` + `chapters.txt` cho mô tả YouTube) · thử 1 câu trước khi chạy batch · tự khởi động engine · lịch sử kết quả · WAV/MP3 · voice profiles · **🎭 hội thoại đa giọng** (kịch bản [Vai] → mỗi vai một giọng) · **CLI mode** (batch không cần GUI) · UI 3 ngôn ngữ VI/JA/EN
+**Tính năng chính / 主な機能:** voice clone 3–10s (zero/few-shot) · đọc 5 ngôn ngữ + cross-language · batch từ `.txt` (kéo-thả, sắp xếp, sửa mục, chạy lại mục lỗi, ETA, thông báo Windows) · **cắt audio mẫu trên waveform** · **kiểm tra độ dài audio mẫu ngay khi chọn file** · **🎤 tự nhận dạng lời thoại mẫu (Whisper local)** · **xuất phụ đề `.srt` khớp từng câu** · **tự retry từng câu — một câu lỗi không làm mất cả chương** · **📖 từ điển phát âm** (ép cách đọc TSMC/EUV/5G, không đụng phụ đề) · **chuẩn hóa loudness −14 LUFS (YouTube)** · **ghép batch thành audiobook** (`merged.wav` + `merged.srt` + `chapters.txt` cho mô tả YouTube) · thử 1 câu trước khi chạy batch · tự khởi động engine · lịch sử kết quả · WAV/MP3 · voice profiles · **🎭 hội thoại đa giọng** (kịch bản [Vai] → mỗi vai một giọng) · **CLI mode** (batch không cần GUI) · UI 3 ngôn ngữ VI/JA/EN
 
 ---
 
@@ -101,7 +101,7 @@ app/
 └─ settings.py        # settings.json
 ```
 
-Cấu hình người dùng lưu tại `%APPDATA%\GPT-SoVITS-VoiceStudio\` (`settings.json`, `profiles.json`).
+Cấu hình người dùng lưu tại `%APPDATA%\GPT-SoVITS-VoiceStudio\` (`settings.json`, `profiles.json`, `pronunciation.json`).
 
 ---
 

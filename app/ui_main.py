@@ -26,6 +26,8 @@ from app.history import append_history, load_history
 from app.i18n import CUT_METHODS, I18n, PROMPT_LANGS, TEXT_LANGS
 from app.profiles import (ProfileStore, VoiceProfile, delete_voice_files,
                           store_voice_files)
+from app.pron_dialog import PronunciationDialog
+from app.pronunciation import PronunciationStore
 from app.settings import Settings, config_dir
 from app.transcribe import TranscribeWorker, WHISPER_TO_PROMPT_LANG
 from app.trim_dialog import TrimDialog
@@ -191,6 +193,7 @@ class MainWindow(QWidget):
         self.settings = Settings()
         self.i18n = I18n(self.settings.get("ui_lang", "vi"))
         self.profiles = ProfileStore()
+        self.pron = PronunciationStore()
         self.client = GptSovitsClient(self.settings.get("host"),
                                       self.settings.get("port"))
         self.engine = EngineManager(on_log=self.sig_engine_log.emit)
@@ -367,10 +370,12 @@ class MainWindow(QWidget):
         self.btn_import_txt = QPushButton()
         self.btn_import_dir = QPushButton()
         self.btn_dialogue = QPushButton()
+        self.btn_pron = QPushButton()
         hi2.addWidget(self.btn_add_queue)
         hi2.addWidget(self.btn_import_txt)
         hi2.addWidget(self.btn_import_dir)
         hi2.addWidget(self.btn_dialogue)
+        hi2.addWidget(self.btn_pron)
         hi2.addStretch(1)
         il.addLayout(hi2)
         ll.addWidget(self.grp_input)
@@ -628,6 +633,7 @@ class MainWindow(QWidget):
         self.btn_transcribe.clicked.connect(self._transcribe_ref)
         self.btn_preview.clicked.connect(self._preview_one)
         self.btn_dialogue.clicked.connect(self._open_dialogue)
+        self.btn_pron.clicked.connect(self._open_pronunciation)
         self.btn_q_up.clicked.connect(lambda: self._move_queue_item(-1))
         self.btn_q_down.clicked.connect(lambda: self._move_queue_item(1))
         self.btn_q_edit.clicked.connect(self._edit_queue_item)
@@ -704,6 +710,8 @@ class MainWindow(QWidget):
         self.btn_import_dir.setText(tr("btn_import_folder"))
         self.btn_dialogue.setText(tr("btn_dialogue"))
         self.btn_dialogue.setToolTip(tr("dlg_hint"))
+        self.btn_pron.setText(tr("btn_pron"))
+        self.btn_pron.setToolTip(tr("pron_hint"))
         self.btn_generate.setText(tr("btn_generate"))
         self.btn_preview.setText(tr("btn_preview"))
         self.btn_preview.setToolTip(tr("preview_tooltip"))
@@ -1110,6 +1118,7 @@ class MainWindow(QWidget):
             normalize_loudness=s.get("normalize_loudness"),
             audiobook_merge=s.get("audiobook_merge"),
             audiobook_gap=s.get("audiobook_gap"),
+            pronunciation_rules=self.pron.enabled_rules(),
         )
 
     def _generate_manual(self):
@@ -1336,6 +1345,13 @@ class MainWindow(QWidget):
     # ==================================================================
     # Whisper: tự nhận dạng prompt_text
     # ==================================================================
+    def _open_pronunciation(self):
+        dlg = PronunciationDialog(self.i18n, self.pron, self)
+        if dlg.exec():
+            n = len(self.pron.enabled_rules())
+            self.append_log(f"📖 {self.i18n.tr('pron_saved')} "
+                            f"{n} {self.i18n.tr('pron_rules_count')}")
+
     def _transcribe_ref(self):
         tr = self.i18n.tr
         path = self.ed_ref.text().strip()

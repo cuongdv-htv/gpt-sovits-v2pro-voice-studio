@@ -20,6 +20,7 @@ from app.audio_post import (build_srt, concat_with_silence, normalize_loudness,
                             offset_srt_entries, wav_duration)
 from app.engine_client import EngineError, GptSovitsClient
 from app.output_writer import _export_mp3, create_output_dir
+from app.pronunciation import matching_rules
 from app.worker import SynthCancelled, TtsJobConfig, synthesize_one
 
 _TAG_RE = re.compile(r"^\s*\[([^\[\]]{1,50})\]\s*(.*)$")
@@ -147,6 +148,8 @@ class DialogueWorker(QThread):
                 "loudness_normalized": cfg.normalize_loudness,
                 "srt_included": bool(cfg.export_srt and all_entries),
                 "failed_sentences": failed,
+                "pronunciation_applied": matching_rules(
+                    self.script_text, cfg.pronunciation_rules),
             }
             (out_dir / "meta.json").write_text(
                 json.dumps(meta, ensure_ascii=False, indent=2),

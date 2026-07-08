@@ -7,11 +7,11 @@ from dataclasses import dataclass, field
 
 from PySide6.QtCore import QThread, Signal
 
-from app.audio_post import (build_chapters, build_srt, concat_with_silence,
-                            normalize_loudness, offset_srt_entries,
+from app.audio_post import (build_srt, concat_with_silence, normalize_loudness,
                             split_sentences, wav_duration)
+from app.audiobook import write_audiobook
 from app.engine_client import EngineError, GptSovitsClient
-from app.output_writer import create_output_dir, write_result
+from app.output_writer import write_result
 from app.pronunciation import apply_rules, matching_rules
 
 # Số lần thử lại MỖI CÂU trước khi bỏ qua câu đó (chế độ SRT).
@@ -312,46 +312,14 @@ class BatchWorker(QThread):
 
     def _write_audiobook(self, parts):
         """parts: [(name, wav_bytes, srt_entries|None), ...] theo thứ tự batch."""
-        gap = float(self.cfg.audiobook_gap)
-        merged_wav = concat_with_silence([w for _, w, _ in parts], gap)
-
-        out_dir = create_output_dir(self.cfg.output_base, "audiobook")
-        (out_dir / "merged.wav").write_bytes(merged_wav)
-
-        # Mốc bắt đầu của từng phần trong file đã ghép
-        chapters, all_entries, offset = [], [], 0.0
-        srt_ok = self.cfg.export_srt and all(e is not None for _, _, e in parts)
-        for name, wav, entries in parts:
-            chapters.append((name, offset))
-            if srt_ok:
-                all_entries.extend(offset_srt_entries(entries, offset))
-            offset += wav_duration(wav) + gap
-
-        # chapters.txt — dán thẳng vào mô tả YouTube
-        (out_dir / "chapters.txt").write_text(build_chapters(chapters),
-                                              encoding="utf-8")
-        if srt_ok:
-            (out_dir / "merged.srt").write_text(build_srt(all_entries),
-                                                encoding="utf-8")
-
-        if self.cfg.export_mp3:
-            from app.output_writer import _export_mp3
-            _export_mp3(merged_wav, out_dir / "merged.mp3")
-
-        import json
-        meta = {
-            "type": "audiobook",
-            "parts": [name for name, _, _ in parts],
-            "chapters": [{"name": n, "start_seconds": round(s, 3)}
-                         for n, s in chapters],
-            "gap_seconds": gap,
-            "duration_seconds": round(wav_duration(merged_wav), 3),
-            "loudness_normalized": self.cfg.normalize_loudness,
-            "srt_included": srt_ok,
-        }
-        (out_dir / "meta.json").write_text(
-            json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
-
+        out_dir, meta = write_audiobook(
+            output_base=self.cfg.output_base,
+            parts=parts,
+            gap=self.cfg.audiobook_gap,
+            export_srt=self.cfg.export_srt,
+            export_mp3=self.cfg.export_mp3,
+            loudness_normalized=self.cfg.normalize_loudness,
+        )
         self.sig_log.emit(f"📚 audiobook: {out_dir} ({len(parts)} parts, "
                           f"{meta['duration_seconds']}s)")
         self.sig_audiobook_done.emit(str(out_dir))

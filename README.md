@@ -110,6 +110,7 @@ app/
 ├─ profiles.py        # voice profiles → profiles.json
 ├─ pronunciation.py   # từ điển phát âm → pronunciation.json
 ├─ audio_post.py      # ghép audio, loudness, tách câu, SRT, chapters
+├─ audiobook.py       # merged.wav + chapters.txt (dùng chung GUI/CLI)
 ├─ i18n.py            # chuỗi 3 ngôn ngữ VI/JA/EN
 └─ settings.py        # settings.json
 

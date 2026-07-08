@@ -338,6 +338,10 @@ Từ v1.3: khi lưu profile, app **tự copy audio mẫu (+ audio phụ) vào kh
 
 > ⚠️ Chế độ SRT tách câu theo dấu `。．.！？!?…` và xuống dòng. Số thập phân kiểu "3.14" có thể bị tách nhầm — với văn bản nhiều số liệu, hãy viết số thành chữ.
 
+> 📖 **Từ điển phát âm.** Nút **📖 Từ điển phát âm…** dưới ô nhập văn bản. Engine hay đọc sai/bỏ qua từ viết tắt và số liệu — thêm quy tắc `TSMC → ティーエスエムシー`, `5G → ファイブジー`, hoặc regex `(\d+),(\d+)億円 → \1\2オクエン`. Chỉ chuỗi **gửi cho engine** bị thay thế; `output.srt`, `input.txt` và kịch bản hội thoại vẫn giữ nguyên chữ bạn viết. Ô **Thử** cho xem trước engine sẽ nhận được gì.
+>
+> Quy tắc áp **tuần tự từ trên xuống**, nên quy tắc cụ thể phải đứng trước quy tắc tổng quát: `EUV` trước `EU`, nếu không `EU` sẽ ăn mất phần đầu của `EUV` và còn lại chữ `V` lơ lửng. Dùng nút ▲▼ để đổi thứ tự. `meta.json` ghi lại chính xác những quy tắc đã thực sự tác động (`pronunciation_applied`). CLI dùng chung từ điển; thêm `--no-dict` để bỏ qua.
+
 > 🛡 **Câu lỗi không làm mất cả chương.** Ở chế độ SRT, mỗi câu được thử lại tối đa 2 lần; câu nào vẫn hỏng thì bị **bỏ qua** (audio và phụ đề vẫn xuất bình thường), tab Log ghi `✗ bỏ qua câu k/n` và `meta.json` liệt kê chúng trong `failed_sentences`. Chỉ khi **mọi** câu đều hỏng thì mục đó mới bị đánh dấu lỗi.
 
 ### Nhóm Engine

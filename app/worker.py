@@ -12,6 +12,7 @@ from app.audio_post import (build_chapters, build_srt, concat_with_silence,
                             split_sentences, wav_duration)
 from app.engine_client import EngineError, GptSovitsClient
 from app.output_writer import create_output_dir, write_result
+from app.pronunciation import apply_rules, matching_rules
 
 # Số lần thử lại MỖI CÂU trước khi bỏ qua câu đó (chế độ SRT).
 # Engine đôi khi lỗi nhất thời (OOM tạm, hụt hơi khi giải mã) — retry cứu được
@@ -61,6 +62,8 @@ class TtsJobConfig:
     normalize_loudness: bool = False  # chuẩn -14 LUFS (YouTube)
     audiobook_merge: bool = False     # ghép cả batch thành 1 file
     audiobook_gap: float = 0.8        # khoảng lặng giữa các mục (giây)
+    # Từ điển phát âm: chỉ đổi chuỗi GỬI engine, không đổi text gốc/SRT
+    pronunciation_rules: list = field(default_factory=list)
 
 
 class SynthCancelled(Exception):
@@ -124,9 +127,12 @@ def synthesize_one(client: GptSovitsClient, cfg: TtsJobConfig, text: str,
     cancel_cb = cancel_cb or (lambda: False)
     log_cb = log_cb or (lambda s: None)
 
+    rules = cfg.pronunciation_rules
+
     if not cfg.export_srt:
-        wav = _tts_with_retry(client, cfg, text, text_lang, seed,
-                              cfg.text_split_method, retries, cancel_cb, log_cb)
+        wav = _tts_with_retry(client, cfg, apply_rules(text, rules), text_lang,
+                              seed, cfg.text_split_method, retries, cancel_cb,
+                              log_cb)
         return wav, None, []
 
     sentences = split_sentences(text) or [text.strip()]
@@ -138,7 +144,9 @@ def synthesize_one(client: GptSovitsClient, cfg: TtsJobConfig, text: str,
         if cancel_cb():
             raise SynthCancelled()
         try:
-            wav = _tts_with_retry(client, cfg, sent, text_lang, seed, "cut0",
+            # Engine đọc bản đã thay thế; SRT bên dưới giữ nguyên `sent` gốc
+            wav = _tts_with_retry(client, cfg, apply_rules(sent, rules),
+                                  text_lang, seed, "cut0",
                                   retries, cancel_cb, log_cb)
         except SynthCancelled:
             raise
@@ -253,6 +261,8 @@ class BatchWorker(QThread):
                     "seed_actual": actual_seed,
                     "loudness_normalized": self.cfg.normalize_loudness,
                     "failed_sentences": failed,
+                    "pronunciation_applied": matching_rules(
+                        item.text, self.cfg.pronunciation_rules),
                 }
                 out_dir = write_result(
                     output_base=self.cfg.output_base,
@@ -369,7 +379,7 @@ class PreviewWorker(QThread):
             if seed is None or int(seed) < 0:
                 seed = random.randint(0, 2**31 - 1)
             wav = self.client.tts(
-                text=sent,
+                text=apply_rules(sent, self.cfg.pronunciation_rules),
                 text_lang=self.text_lang,
                 ref_audio_path=self.cfg.ref_audio_path,
                 prompt_text=self.cfg.prompt_text,

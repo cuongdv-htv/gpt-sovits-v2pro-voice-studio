@@ -223,22 +223,31 @@ def main(argv=None) -> int:
                       + (f"  ({len(failed)} sentence(s) skipped)" if failed else ""))
                 ok += 1
                 if cfg.audiobook_merge:
-                    merged_parts.append((name, wav, entries))
+                    # đường dẫn, không phải bytes — xem app/audiobook.py
+                    merged_parts.append((name, str(out_dir / "output.wav"),
+                                         entries))
             except EngineError as e:
                 print(f"  FAILED: {e}", file=sys.stderr)
                 fail += 1
 
         if cfg.audiobook_merge and merged_parts:
-            out_dir, meta = write_audiobook(
-                output_base=cfg.output_base,
-                parts=merged_parts,
-                gap=cfg.audiobook_gap,
-                export_srt=cfg.export_srt,
-                export_mp3=cfg.export_mp3,
-                loudness_normalized=cfg.normalize_loudness,
-            )
-            print(f"Audiobook -> {out_dir} "
-                  f"({len(merged_parts)} parts, {meta['duration_seconds']}s)")
+            # Ghép hỏng KHÔNG được xóa sổ các chương đã lưu thành công.
+            # (GUI đã bắt lỗi ở đây từ trước; CLI thì crash kèm traceback.)
+            try:
+                out_dir, meta = write_audiobook(
+                    output_base=cfg.output_base,
+                    parts=merged_parts,
+                    gap=cfg.audiobook_gap,
+                    export_srt=cfg.export_srt,
+                    export_mp3=cfg.export_mp3,
+                    loudness_normalized=cfg.normalize_loudness,
+                )
+                print(f"Audiobook -> {out_dir} "
+                      f"({len(merged_parts)} parts, {meta['duration_seconds']}s)")
+            except Exception as e:
+                print(f"Audiobook merge failed: {e}", file=sys.stderr)
+                print("Các chương riêng lẻ vẫn đã được lưu.", file=sys.stderr)
+                fail += 1
     finally:
         if we_started and not args.keep_engine:
             mgr.stop()

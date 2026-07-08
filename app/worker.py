@@ -278,7 +278,10 @@ class BatchWorker(QThread):
                 item.output_dir = str(out_dir)
                 ok += 1
                 if self.cfg.audiobook_merge:
-                    merged_parts.append((item.name, wav, srt_entries))
+                    # Giữ ĐƯỜNG DẪN, không giữ bytes: batch dài hàng giờ
+                    # sẽ không nằm hết trong RAM.
+                    merged_parts.append(
+                        (item.name, str(out_dir / "output.wav"), srt_entries))
                 self.sig_item_progress.emit(100)
                 self.sig_log.emit(f"✓ saved: {out_dir}")
                 self.sig_item_finished.emit(i, "done", str(out_dir))
@@ -311,7 +314,7 @@ class BatchWorker(QThread):
         self.sig_batch_finished.emit(ok, fail, self._cancel)
 
     def _write_audiobook(self, parts):
-        """parts: [(name, wav_bytes, srt_entries|None), ...] theo thứ tự batch."""
+        """parts: [(name, wav_path, srt_entries|None), ...] theo thứ tự batch."""
         out_dir, meta = write_audiobook(
             output_base=self.cfg.output_base,
             parts=parts,

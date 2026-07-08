@@ -28,10 +28,37 @@ def test_split_sentences_van_ban_rong():
     assert split_sentences("   \n  ") == []
 
 
-def test_split_sentences_tach_nham_so_thap_phan():
-    """Hành vi ĐÃ BIẾT và có ghi tài liệu: dấu '.' của số thập phân bị coi là
-    kết câu. Test này khóa hành vi lại — nếu sau này sửa, phải sửa cả docs."""
-    assert split_sentences("Pi là 3.14 nhé.") == ["Pi là 3.", "14 nhé."]
+def test_split_sentences_khong_tach_so_thap_phan():
+    assert split_sentences("Pi là 3.14 nhé.") == ["Pi là 3.14 nhé."]
+
+
+def test_split_sentences_khong_tach_dau_phan_cach_nghin():
+    assert split_sentences("投資額は1.200億円です。") == ["投資額は1.200億円です。"]
+
+
+def test_split_sentences_van_tach_khi_cham_o_cuoi_so():
+    """'.' sau chữ số nhưng KHÔNG trước chữ số vẫn kết câu."""
+    assert split_sentences("Giá là 3. Rẻ quá.") == ["Giá là 3.", "Rẻ quá."]
+
+
+def test_split_sentences_phien_ban_va_ten_mien():
+    assert split_sentences("Bản v1.2.3 ra rồi.") == ["Bản v1.2.3 ra rồi."]
+
+
+def test_split_sentences_gom_cum_dau_lien_nhau():
+    assert split_sentences("Thật à？！ Ừ…") == ["Thật à？！", "Ừ…"]
+
+
+def test_split_sentences_cau_cuoi_khong_co_dau():
+    assert split_sentences("Câu một. Câu hai không dấu") == \
+        ["Câu một.", "Câu hai không dấu"]
+
+
+def test_split_sentences_chu_viet_co_dau_la_noi_dung():
+    """'Ừ' là U+1EEA (Latin Extended Additional), không nằm trong À-ɏ.
+    Thiếu khối này thì câu chỉ gồm chữ Việt có dấu bị loại khỏi SRT."""
+    assert split_sentences("Thật à？！ Ừ…") == ["Thật à？！", "Ừ…"]
+    assert split_sentences("Ừ. Ệ nhỉ.") == ["Ừ.", "Ệ nhỉ."]
 
 
 # ------------------------------------------------------------- SRT

@@ -55,6 +55,12 @@ def wav_duration(wav_bytes: bytes) -> float:
     return info.frames / float(info.samplerate)
 
 
+def wav_duration_file(path) -> float:
+    """Độ dài file WAV qua header (không giải mã). Ném nếu đọc không được."""
+    info = sf.info(str(path))
+    return info.frames / float(info.samplerate)
+
+
 def audio_duration(path: str) -> Optional[float]:
     """Độ dài file audio (giây). None nếu không đọc được.
 
@@ -100,6 +106,45 @@ def concat_with_silence(wav_list: List[bytes], gap_seconds: float) -> bytes:
     return array_to_wav_bytes(np.vstack(chunks), sr)
 
 
+def concat_files_to_wav(paths: List[str], gap_seconds: float,
+                        out_path) -> float:
+    """Ghép các file WAV thành `out_path`, chèn khoảng lặng giữa các file.
+
+    Đọc và ghi theo BLOCK — bộ nhớ dùng không phụ thuộc tổng độ dài. Một
+    audiobook 10 chương × 25 phút trước đây ngốn ~2 GB RAM (float32 của cả
+    bộ), giờ chỉ giữ vài trăm KB mỗi lần.
+
+    Trả về tổng thời lượng (giây)."""
+    if not paths:
+        raise ValueError("empty path list")
+
+    first = sf.info(str(paths[0]))
+    sr, channels = int(first.samplerate), int(first.channels)
+    silence = np.zeros((max(0, int(round(gap_seconds * sr))), channels),
+                       dtype="float32")
+    frames = 0
+
+    with sf.SoundFile(str(out_path), "w", samplerate=sr, channels=channels,
+                      subtype="PCM_16") as out:
+        for i, path in enumerate(paths):
+            info = sf.info(str(path))
+            if int(info.samplerate) != sr:
+                raise ValueError(
+                    f"sample rate mismatch: {info.samplerate} != {sr}")
+            if i > 0 and len(silence):
+                out.write(silence)
+                frames += len(silence)
+            with sf.SoundFile(str(path)) as src:
+                for block in src.blocks(blocksize=65536, dtype="float32",
+                                        always_2d=True):
+                    if block.shape[1] != channels:
+                        block = (block.mean(axis=1, keepdims=True)
+                                 .repeat(channels, axis=1))
+                    out.write(block)
+                    frames += len(block)
+    return frames / float(sr)
+
+
 # ---------------------------------------------------------------- loudness
 def normalize_loudness(wav_bytes: bytes, target_lufs: float = -14.0,
                        true_peak: float = -1.5, lra: float = 11.0) -> bytes:
@@ -138,10 +183,16 @@ def normalize_loudness(wav_bytes: bytes, target_lufs: float = -14.0,
 
 
 # ---------------------------------------------------------------- tách câu
-# Câu kết thúc bằng 。．.！!？?… hoặc xuống dòng. Đơn giản, đủ dùng cho SRT;
-# số thập phân kiểu "3.14" có thể bị tách — ghi chú trong tài liệu.
-_SENT_RE = re.compile(r"[^。．！？!?…\n\.]+[。．！？!?…\.]*")
-_HAS_CONTENT = re.compile(r"[0-9A-Za-zÀ-ɏЀ-ӿ"
+# Câu kết thúc bằng 。．！!？?… hoặc dấu chấm, hoặc xuống dòng.
+#
+# Dấu chấm CHỈ kết câu khi không đứng ngay trước một chữ số: "3.14" và
+# "1.200億円" giữ nguyên một câu, còn "Giá 3." vẫn kết câu bình thường.
+# `+` cho phép gom cụm dấu liền nhau ("！？", "…。").
+_SENT_END = re.compile(r"(?:\.(?!\d)|[。．！？!?…])+")
+# Ký tự "có nội dung" — câu chỉ gồm dấu câu/khoảng trắng sẽ bị loại.
+# Ḁ-ỿ: Latin Extended Additional — chữ Việt có dấu (ừ, ế, ộ…) nằm ở
+# đây, KHÔNG nằm trong À-ɏ. Thiếu khối này thì câu như "Ừ…" bị mất.
+_HAS_CONTENT = re.compile(r"[0-9A-Za-zÀ-ɏḀ-ỿЀ-ӿ"
                           r"぀-ヿ㐀-䶿一-鿿"
                           r"가-힯]")
 
@@ -150,10 +201,15 @@ def split_sentences(text: str) -> List[str]:
     """Tách văn bản thành danh sách câu (giữ dấu câu cuối)."""
     out = []
     for line in text.splitlines():
-        for m in _SENT_RE.findall(line):
-            s = m.strip()
-            if s and _HAS_CONTENT.search(s):
-                out.append(s)
+        start = 0
+        for m in _SENT_END.finditer(line):
+            chunk = line[start:m.end()].strip()
+            start = m.end()
+            if chunk and _HAS_CONTENT.search(chunk):
+                out.append(chunk)
+        tail = line[start:].strip()          # phần sau dấu câu cuối cùng
+        if tail and _HAS_CONTENT.search(tail):
+            out.append(tail)
     return out
 
 

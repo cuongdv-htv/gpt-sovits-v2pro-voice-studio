@@ -74,7 +74,18 @@ Mẹo / ヒント:
 
 ---
 
-## 3. Build `.exe`
+## 3. Chạy test / テスト
+
+```bat
+.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
+.venv\Scripts\python.exe -m pytest
+```
+
+128 test cho phần logic thuần (tách câu, SRT, chapters, ghép audio, từ điển phát âm, retry/bỏ câu hỏng, các store JSON, i18n). Không cần engine, không cần GPU, chạy dưới 1 giây. Mọi test đều trỏ `%APPDATA%` vào thư mục tạm nên **không đụng vào cấu hình thật** của bạn.
+
+---
+
+## 4. Build `.exe`
 
 ```bat
 build_exe.bat
@@ -86,7 +97,7 @@ build_exe.bat
 
 ---
 
-## 4. Cấu trúc / 構成
+## 5. Cấu trúc / 構成
 
 ```
 app/
@@ -97,15 +108,19 @@ app/
 ├─ worker.py          # QThread batch + signals (UI không đơ)
 ├─ output_writer.py   # thư mục timestamp+tên, wav/mp3/meta.json
 ├─ profiles.py        # voice profiles → profiles.json
-├─ i18n.py            # chuỗi song ngữ VI/JA
+├─ pronunciation.py   # từ điển phát âm → pronunciation.json
+├─ audio_post.py      # ghép audio, loudness, tách câu, SRT, chapters
+├─ i18n.py            # chuỗi 3 ngôn ngữ VI/JA/EN
 └─ settings.py        # settings.json
+
+tests/               # pytest, không cần engine/GPU (python -m pytest)
 ```
 
 Cấu hình người dùng lưu tại `%APPDATA%\GPT-SoVITS-VoiceStudio\` (`settings.json`, `profiles.json`, `pronunciation.json`).
 
 ---
 
-## 5. Xử lý sự cố / トラブルシューティング
+## 6. Xử lý sự cố / トラブルシューティング
 
 | Vấn đề | Cách xử lý |
 |---|---|

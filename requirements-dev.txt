@@ -1,0 +1,4 @@
+# Test-only dependencies. Runtime deps live in requirements.txt
+# Run:  .venv\Scripts\python.exe -m pytest
+-r requirements.txt
+pytest>=8.0
